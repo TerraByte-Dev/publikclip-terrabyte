@@ -55,6 +55,17 @@ export interface RenderOutput {
   duration: number
   words: number
   event_tags: number
+  /* EBU R128 of the delivered file. THREE states, all real and all reachable:
+   *  absent - every render.json written before this shipped, and it stays
+   *           reachable on new jobs because render_clip.py replaces the entry;
+   *  null   - the measurement ran and failed (no audio stream, ffmpeg gone);
+   *  number - a reading.
+   * api.ts's invoke<JobResults> is an unchecked assertion, so typing these
+   * `number` compiles clean and then throws TypeError on .toFixed() for every
+   * clip above, blanking the audit panel. `?: number | null` is what makes tsc
+   * demand the guard, and `!= null` is the one comparison catching both. */
+  lufs?: number | null
+  true_peak?: number | null
 }
 
 export interface JobResults {
@@ -66,7 +77,7 @@ export interface JobResults {
     probe: { duration_sec: number; width: number; height: number }
   } | null
   score: { clips: Clip[]; llm_mode: string; model: string; scored_count: number } | null
-  render: { outputs: RenderOutput[]; emoji_ok: boolean; caption_preset: string } | null
+  render: { outputs: RenderOutput[]; emoji_ok: boolean; caption_preset: string; lufs_target?: number } | null
   events: { counts: Record<string, number>; timeline: unknown[]; arousal_source: string } | null
   candidates: { count: number; effective_weights: Record<string, number>; heatmap_present: boolean } | null
 }

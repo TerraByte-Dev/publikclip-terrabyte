@@ -19,11 +19,13 @@ CRF and the hardware encoder's bitrate model.
 
 from __future__ import annotations
 
+import math
 import os
+import re
 import subprocess
 from pathlib import Path
 
-from . import ffmpeg_bin
+from . import ffmpeg_bin, loudness
 
 OUT_W = 1080
 OUT_H = 1920
@@ -139,12 +141,28 @@ def render_clip(
     else:
         vcodec = ["-c:v", "libx264", "-preset", "medium", "-crf", str(X264_CRF)]
 
+    seek = ["-ss", f"{clip_start:.3f}", "-t", f"{duration:.3f}", "-i", media_path]
+    # Pass 1. Nothing sits upstream of loudnorm in this command's -af chain, so
+    # the same span with video off IS the audio pass 2 normalises — confirmed by
+    # re-rendering those spans audio-only, which reproduced the finished files
+    # already on disk exactly (521943/05 -11.3 LUFS/-0.5 dBTP, /08 -12.3/+0.1,
+    # /11 -17.3/-1.0). Two-pass then lands them at -13.8, -13.9 and -14.3.
+    # Costs one extra audio decode: measured 2.4-2.8 s on the 360p stereo
+    # source and 2.0 s on a 1080p stereo one, but 11.6 s on the 1080p 5.1
+    # 48 kHz source — that is loudnorm's true-peak oversampling across six
+    # channels, not the demux. None (silent clip, dead ffmpeg, unparseable
+    # stderr) falls straight back to today's single-pass filter.
+    measured = loudness.measure(
+        ffmpeg_bin.ffmpeg(), [*seek, "-vn"],
+        ["-af", loudness.analysis_filter(lufs, true_peak)],
+        timeout=min(timeout, 300.0),
+    )
+
     args = [
         ffmpeg_bin.ffmpeg(), "-y", "-v", "error",
-        "-ss", f"{clip_start:.3f}", "-t", f"{duration:.3f}",
-        "-i", media_path,
+        *seek,
         "-vf", ",".join(vf_parts),
-        "-af", f"loudnorm=I={lufs}:TP={true_peak}:LRA=11",
+        "-af", loudness.filter_str(lufs, true_peak, measured),
         *vcodec,
         "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
@@ -181,3 +199,74 @@ def verify_output(out_path: Path, expected_duration: float) -> dict:
         "width": video.get("width"),
         "height": video.get("height"),
     }
+
+
+_LOUDNESS_NULL = {"lufs": None, "true_peak": None}
+_R128_I = re.compile(r"^\s*I:\s*(\S+)\s+LUFS", re.M)
+_R128_TP = re.compile(r"True peak:\s*\n\s*Peak:\s*(\S+)\s+dBFS")
+
+
+def _finite(match: re.Match | None) -> float | None:
+    """ebur128 prints 'Peak: -inf dBFS' on a silent clip. float('-inf')
+    json.dumps to `-Infinity`, which is not JSON — serde_json returns None for
+    the whole file, main.rs::job_results' read_stage falls back to Value::Null
+    and the review bay shows ZERO clips. Non-finite reads as no reading."""
+    if match is None:
+        return None
+    try:
+        value = float(match.group(1))
+    except ValueError:
+        return None
+    return round(value, 1) if math.isfinite(value) else None
+
+
+def _parse_r128(stderr: str) -> dict:
+    """The Summary block only. ebur128 also logs ~10 progress lines a second
+    (417 on a 47 s clip) and every one of them carries its own `I:` and its own
+    `dBFS` columns (FTPK/TPK) — so both reads have to be anchored inside the
+    Summary, and a run that exits 0 without one reads as all-None rather than
+    matching something mid-file."""
+    parts = stderr.rsplit("Summary:", 1)
+    if len(parts) < 2:
+        return dict(_LOUDNESS_NULL)
+    tail = parts[1]
+    return {
+        "lufs": _finite(_R128_I.search(tail)),
+        "true_peak": _finite(_R128_TP.search(tail)),
+    }
+
+
+def measure_loudness(out_path: Path, timeout: float = 300.0) -> dict:
+    """EBU R128 of the DELIVERED file: integrated LUFS and true peak dBTP.
+    This is the number the review panel shows.
+
+    ebur128 on the finished mp4, NOT loudnorm's analysis pass, for two reasons
+    that were measured. loudnorm's own `output_tp` is the requested ceiling
+    echoed back — it reads "-1.00" for both files that actually measure
+    +0.1 dBTP on disk, so no prediction can see the clipping. And the AAC
+    encode itself lifts true peak by up to ~1 dB AFTER loudnorm has hit its
+    ceiling, which is why 28 of 38 shipped clips sit above the -1.0 dBTP aim.
+    Only the finished file knows its own level.
+
+    LRA is deliberately not reported. Measured on a real beeped clip, the
+    censor tone leaves integrated and peak untouched but moves LRA (8.7 -> 9.2,
+    and up to ~10 LU on a heavily censored clip) — a range that is an artifact
+    of the beeps is worse than no range, and one number was the ask.
+
+    Never raises. A metering failure is a blank number, never a failed render.
+    """
+    try:
+        proc = subprocess.run(
+            [
+                ffmpeg_bin.ffmpeg(), "-nostdin", "-hide_banner", "-nostats", "-v", "info",
+                "-i", str(out_path), "-vn", "-af", "ebur128=peak=true", "-f", "null", "-",
+            ],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return dict(_LOUDNESS_NULL)
+    # NOT -v error: ebur128 prints its Summary at info, and -v error yields an
+    # empty stderr and a silent all-None.
+    if proc.returncode != 0:
+        return dict(_LOUDNESS_NULL)
+    return _parse_r128(proc.stderr or "")

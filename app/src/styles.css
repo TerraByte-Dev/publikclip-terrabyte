@@ -523,6 +523,11 @@ body {
 }
 .film-card {
   flex: none;
+  /* the HOT flag is absolute; .filmstrip is already position: relative, so
+     without this every badge anchors to the STRIP and they all stack in one
+     corner (and jump on hover, since .film-card:hover's translateY makes a
+     containing block). */
+  position: relative;
   width: 92px;
   aspect-ratio: 9 / 14;
   background: var(--panel);
@@ -1215,3 +1220,58 @@ html.reduce-motion *::after {
    so show the whole bar, held. Studio passes style={undefined} in the
    indeterminate branch, so no inline width outranks this. */
 html.reduce-motion .deck-fill.indeterminate { width: 100%; opacity: 0.45; }
+
+/* Corner flag, absolute so it never reflows the score/time/platform stack.
+   Fires on 1 of the 38 clips on disk (-11.3 LUFS, 2.7 LU over target) and on
+   none once the render holds -14 LUFS. */
+.film-loud {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  padding: 2px 4px;
+  color: var(--ink);
+  background: var(--red);
+}
+
+/* LOUDNESS - the one block in the audit that is a warning, not provenance.
+   Semantic colours only: --accent is THEMED across twelve accents (one of them
+   crimson), so it cannot carry "quiet vs blast". --green/--red are declared
+   theme-invariant for exactly this reason; QUIET is not an alarm, so --dim.
+   Order matters: -clipping is last so it wins over -ok/-quiet. */
+.loud-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--green);
+  padding: 14px 16px;
+  max-width: 560px;
+}
+.loud-quiet { border-left-color: var(--dim); }
+.loud-hot { border-left-color: var(--red); }
+.loud-clipping { border-left-color: var(--red); }
+.loud-head { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+.loud-verdict {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--green);
+}
+.loud-quiet .loud-verdict { color: var(--dim); }
+.loud-hot .loud-verdict,
+.loud-clipping .loud-verdict { color: var(--red); }
+.loud-peak {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--red);
+  border: 1px solid var(--red);
+  padding: 2px 7px;
+}
+.loud-nums { font-family: var(--mono); font-size: 11px; color: var(--text); margin-bottom: 7px; }
+.loud-note { font-size: 13px; color: var(--dim); line-height: 1.5; }
+.loud-note + .loud-note { margin-top: 6px; }
+.loud-none { font-size: 11px; color: var(--faint); }

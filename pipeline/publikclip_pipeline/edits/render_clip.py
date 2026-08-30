@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .. import config
 from ..captions import ass as ass_mod
-from ..render import ffmpeg_bin, renderer
+from ..render import ffmpeg_bin, loudness, renderer
 from . import store
 from .timeline import ClipEdit, TimeRemap, detect_dead_space, keep_ranges
 
@@ -370,6 +370,38 @@ def render_clip_edit(job_dir: Path, clip_idx: int, emit) -> dict:
         trims.append(f"[0:a]atrim=start={ra:.3f}:end={rb:.3f},asetpts=PTS-STARTPTS[a{i}]")
     concat_in = "".join(f"[v{i}][a{i}]" for i in range(n))
     graph = trims + [f"{concat_in}concat=n={n}:v=1:a=1[vc][ac]"]
+    spans = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in beeps_out)
+
+    # Pass 1, over EXACTLY the samples pass 2 will normalise: this graph's own
+    # trims and concat (dead space already cut), beeps already MUTED, tone not
+    # yet mixed. Three ways to get this wrong, all measured on real spans:
+    #   - measuring the raw contiguous span instead of the cut timeline is
+    #     small, but free to get right;
+    #   - measuring AFTER the amix is fatal. BEEP_AMPLITUDE 0.20 at 1 kHz is
+    #     ~-14 LUFS on its own, so on a heavily censored clip the tone BECOMES
+    #     the measurement (-14.3 where the speech is -34.8). Tap between the
+    #     mute and the mix — the boundary the beep design already established;
+    #   - rebuilding an audio-only chain instead of reusing `graph` invites
+    #     drift the moment someone edits the render graph. Measured, reuse is
+    #     also free: reusing `graph` and reusing it audio-only gave the
+    #     IDENTICAL measurement in 2.49 s vs 2.53 s. [vc]nullsink drops video.
+    # None (silent clip, unmeasurable) falls back to today's single pass.
+    an_graph = graph + ["[vc]nullsink"]
+    if beeps_out:
+        an_graph.append(f"[ac]volume=0:enable='{spans}'[acb]")
+    an_graph.append(
+        f"[{'acb' if beeps_out else 'ac'}]"
+        f"{loudness.analysis_filter(settings.lufs_target, settings.true_peak_db)}[an]"
+    )
+    emit(-1, "Measuring loudness…")
+    measured = loudness.measure(
+        ffmpeg_bin.ffmpeg(),
+        ["-ss", f"{span_a:.3f}", "-t", f"{span_b - span_a:.3f}", "-i", ingest["media_path"]],
+        ["-filter_complex", ";".join(an_graph), "-map", "[an]"],
+    )
+    loudnorm_af = loudness.filter_str(
+        settings.lufs_target, settings.true_peak_db, measured
+    )
 
     cmd_path = out_dir / f"clip_{clip_idx:02d}.cmd"
     cmd_path.write_text("\n".join(renderer.sendcmd_lines(boxes, fps)) + "\n")
@@ -405,12 +437,9 @@ def render_clip_edit(job_dir: Path, clip_idx: int, emit) -> dict:
         # zero delay in dynamic mode (measured 0-sample xcorr lag), so the tone
         # lands exactly in the hole the mute punched. Do NOT move the gate
         # downstream of loudnorm: on ffmpeg 8.1.1 `enable` never fires there.
-        spans = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in beeps_out)
         graph.append("[ac]asplit=2[sp][tn]")
         graph.append(f"[sp]volume=0:enable='{spans}'[acb]")
-        graph.append(
-            f"[acb]loudnorm=I={settings.lufs_target}:TP={settings.true_peak_db}:LRA=11[anorm]"
-        )
+        graph.append(f"[acb]{loudnorm_af}[anorm]")
         # aeval (not aevalsrc, not sine): it ignores the input samples and
         # synthesises from t, inheriting the split's rate, framing AND channel
         # layout. c=same keeps a mono source mono and a stereo source stereo —
@@ -427,7 +456,7 @@ def render_clip_edit(job_dir: Path, clip_idx: int, emit) -> dict:
         # the whole clip. duration=first ends the mix on the speech.
         graph.append("[anorm][tone]amix=inputs=2:normalize=0:duration=first[af]")
     else:
-        graph.append(f"[ac]loudnorm=I={settings.lufs_target}:TP={settings.true_peak_db}:LRA=11[af]")
+        graph.append(f"[ac]{loudnorm_af}[af]")
 
     if renderer.videotoolbox_available():
         vcodec = ["-c:v", "h264_videotoolbox", "-b:v", renderer.VT_BITRATE, "-allow_sw", "1"]
@@ -463,6 +492,12 @@ def render_clip_edit(job_dir: Path, clip_idx: int, emit) -> dict:
         "words": len(cap_words),
         "event_tags": len(clip_events_out),
         "edited": True,
+        # Same spread as render/stage.py. This entry REPLACES that one in
+        # render.json below, so a key missing here deletes the reading on edit.
+        # Beeps are in the file and so in the number, by design — the viewer
+        # hears them — and they cannot skew it: on a real 0.48 s-of-40 s beeped
+        # clip, delivered and tone-muted both read -15.0 LUFS / -1.3 dBTP.
+        **renderer.measure_loudness(out_path),
     }
 
     # keep render.json in sync so the review UI reflects the new file

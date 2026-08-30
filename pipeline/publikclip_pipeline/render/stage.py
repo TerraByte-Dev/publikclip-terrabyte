@@ -118,6 +118,12 @@ class RenderStage(Stage):
                     "duration": round(check["duration"], 2),
                     "words": len(words),
                     "event_tags": len(clip_events),
+                    # R128 of the finished file. Spread, not retyped: edits/
+                    # render_clip.py REPLACES this whole entry in render.json
+                    # (outputs[i] = entry), so a key written only here is
+                    # deleted the first time a clip is re-rendered. Never part
+                    # of check["ok"] — a hot clip is a report, not a failure.
+                    **renderer.measure_loudness(out_path),
                 }
             )
 
@@ -128,4 +134,8 @@ class RenderStage(Stage):
             "emoji_ok": emoji_ok,
             "captions_burned": captions_ok,
             "caption_preset": preset,
+            # What the clips were normalised TOWARD. A measured LUFS is not
+            # actionable without it. Stage-level: it describes the run, and the
+            # per-clip re-render only swaps one entry in outputs, so it survives.
+            "lufs_target": ctx.settings.lufs_target,
         }
