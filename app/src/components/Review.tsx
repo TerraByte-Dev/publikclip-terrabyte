@@ -248,7 +248,7 @@ export default function Review({ results, onBack, onRestyle }: Props) {
                 <p className="audit-label">MUSIC BRIEF</p>
                 <div className="music-card">
                   <p className="music-main">
-                    <span className="amber">{pair.clip.music.genre}</span> ·{' '}
+                    <span className="accent">{pair.clip.music.genre}</span> ·{' '}
                     {pair.clip.music.mood} · <span className="mono">{pair.clip.music.bpm_range} bpm</span>
                   </p>
                   <p className="music-theme">{pair.clip.music.theme}</p>

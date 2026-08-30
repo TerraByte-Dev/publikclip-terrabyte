@@ -615,7 +615,7 @@ export default function ClipEditor({ jobId, clipIndex, onClose, onRendered }: Pr
         <div className="tl-playhead" ref={playheadRef} />
         {/* waveform */}
         <svg className="tl-wave" viewBox="0 0 100 30" preserveAspectRatio="none">
-          <path d={wavePath} fill="rgba(255,178,36,0.25)" />
+          <path d={wavePath} fill="rgb(var(--accent-rgb) / 0.25)" />
         </svg>
 
         {/* out-of-bounds shade */}

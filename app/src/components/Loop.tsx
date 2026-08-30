@@ -72,7 +72,7 @@ function Sparkline({ points }: { points: { age_hours: number | null; views: numb
     .join(' ')
   return (
     <svg className="loop-spark" width="60" height="18" viewBox="0 0 60 18">
-      <path d={path} fill="none" stroke="var(--amber)" strokeWidth="1.5" />
+      <path d={path} fill="none" stroke="var(--accent)" strokeWidth="1.5" />
     </svg>
   )
 }
@@ -129,7 +129,7 @@ function Scatter({ rows }: { rows: LoopLinked[] }) {
                 clipPath="inset(0 round 3px)"
               />
             ) : (
-              <circle cx={cx} cy={cy} r="5" fill="var(--amber)" />
+              <circle cx={cx} cy={cy} r="5" fill="var(--accent)" />
             )}
           </g>
         )
@@ -312,7 +312,7 @@ export default function Loop({ onBack }: Props) {
         <div className="loop-head-title">
           <p className="audit-kicker">THE FEEDBACK LOOP</p>
           <h1 className="loop-title">
-            SCORE VS <span className="amber">REALITY.</span>
+            SCORE VS <span className="accent">REALITY.</span>
           </h1>
         </div>
         <div className="loop-head-status">
@@ -346,7 +346,7 @@ export default function Loop({ onBack }: Props) {
           <div className="loop-consts">
             {Object.entries(activeConstants).map(([name, value]) => (
               <span className="loop-const mono" key={name}>
-                {name} <b className={value !== defaults[name] ? 'amber' : ''}>×{Number(value).toFixed(2)}</b>
+                {name} <b className={value !== defaults[name] ? 'accent' : ''}>×{Number(value).toFixed(2)}</b>
                 {value !== defaults[name] && (
                   <s className="loop-dim">×{Number(defaults[name] ?? 0).toFixed(2)}</s>
                 )}
@@ -357,7 +357,7 @@ export default function Loop({ onBack }: Props) {
         <div className="loop-calib-side">
           {overview.report.ready ? (
             <p className="mono">
-              ρ <b className="amber">{overview.report.spearman_rho ?? '—'}</b>
+              ρ <b className="accent">{overview.report.spearman_rho ?? '—'}</b>
               {' · '}pairwise <b>{overview.report.pairwise_accuracy ?? '—'}</b>
               {' · '}n={overview.report.pairs}
             </p>

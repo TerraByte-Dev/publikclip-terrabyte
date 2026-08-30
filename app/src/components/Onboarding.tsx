@@ -38,7 +38,7 @@ export default function Onboarding({ onDone }: Props) {
             <br />
             THAT SHOWS
             <br />
-            ITS WORK<span className="amber">.</span>
+            ITS WORK<span className="accent">.</span>
           </h1>
           <p className="ob-body">
             Long video in, vertical clips out. Speech, laughter, speakers, and camera
@@ -57,7 +57,7 @@ export default function Onboarding({ onDone }: Props) {
           <h2 className="ob-h2">Pick how moments get judged</h2>
           <div className="ob-cards">
             <div className={`ob-card ${saved ? 'done' : ''}`}>
-              <h3>Gemini key <span className="chip chip-amber">recommended</span></h3>
+              <h3>Gemini key <span className="chip chip-accent">recommended</span></h3>
               <p>
                 Bring your own key (aistudio.google.com). Costs roughly{' '}
                 <span className="mono">$0.15</span> per hour of source video. Best
