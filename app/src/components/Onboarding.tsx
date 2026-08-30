@@ -84,8 +84,12 @@ export default function Onboarding({ onDone }: Props) {
                 {ollama === null
                   ? 'Checking…'
                   : ollama.running
-                    ? `Running locally (${ollama.models.filter((m) => !m.includes('embed')).slice(0, 2).join(', ') || 'no chat models'}). Zero cost, fully offline — scores are labeled "local estimate" because small models judge humor less reliably.`
-                    : 'Not detected. Install ollama.com and pull a model (e.g. llama3.1:8b) to run fully offline.'}
+                    ? // Deliberately does NOT name a model: this is the first two
+                      // /api/tags entries in daemon (newest-pull-first) order, which
+                      // is unrelated to the one the picker resolves. Naming the wrong
+                      // judge is worse than naming none.
+                      `Running locally (${ollama.models.length} model${ollama.models.length === 1 ? '' : 's'}). Zero cost, fully offline — scores are labeled "local estimate" because small models judge humor less reliably.`
+                    : 'Not detected. Install ollama.com and pull a model (e.g. qwen3.5) to run fully offline.'}
               </p>
             </div>
           </div>
