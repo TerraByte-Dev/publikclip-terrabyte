@@ -1,5 +1,15 @@
 # publikclip
 
+> ### This is a modified fork
+>
+> **publikclip-terrabyte** is a fork of
+> [Blueturboguy07/publikclip](https://github.com/Blueturboguy07/publikclip),
+> maintained by [TerraByte-Dev](https://github.com/TerraByte-Dev).
+> **Modified since 2026-08-30.** It is not the official publikclip and is not
+> endorsed by the upstream author.
+>
+> Licensed AGPL-3.0-or-later, same as upstream. See [Changes from upstream](#changes-from-upstream).
+
 **Long video in. Scored vertical clips out. Everything runs on your machine.**
 
 publikclip is an open-source (AGPL-3.0) desktop app that takes a YouTube URL or a
@@ -92,7 +102,45 @@ uv run publikclip run "https://www.youtube.com/watch?v=..."
 cd app && npm install && npm run tauri dev
 ```
 
+## Changes from upstream
+
+Fixes here are being offered back upstream; each is a self-contained branch so
+it can be reviewed on its own.
+
+**Bug fixes (proposed upstream)**
+
+- **Asset-protocol scope** — the clip editor's source monitor was dead for any
+  user whose media sits outside `~/.publikclip`, which is everyone who ingests a
+  local file. The webview answered every `<video>` request with 403, so the
+  player never loaded while the timeline drew fine.
+- **Local Ollama scoring** — reasoning models (qwen3, gemma4, …) return an empty
+  `message.content` under a constrained schema and failed 100% of the time; the
+  model picker read parameter counts out of the tag name, so every `:latest` tag
+  scored zero and a 7B *coder* model was chosen to judge humor.
+- **Pipeline error reporting** — any non-`StageError` failure was swallowed and
+  surfaced as "the pipeline exited unexpectedly", whose advice is actively wrong.
+- **`num_ctx` and the Gemini key** — Ollama sized its KV cache from the model's
+  full trained context (a 600 s apparent hang); the Gemini key rode in the request
+  URL and leaked into tracebacks and the jobs database.
+- **Vite dev server** — Vite watched `src-tauri/target`, so `npm run tauri dev`
+  died with `EBUSY` on any run that rebuilt the Rust side.
+- **speechbrain pin** — 1.1.0 silently degrades SER arousal scoring on Windows.
+
+**Additions (this fork)**
+
+- **Job deletion** from the studio rail, with a native confirm.
+- **Editable captions** — every in-bounds word is an editable chip; retype what
+  the transcriber misheard, or clear a word to drop it. Overrides survive bounds
+  drags, dead-space toggles and re-renders.
+- **Insertable censor beep** — a 1 kHz broadcast bleep glued to a word, mixed in
+  after loudness normalisation, with the covered word auto-masked in the captions.
+
 ## License
 
 AGPL-3.0-or-later. Portions adapted from other open-source projects — see
 `VENDORED-LICENSES.md` for the full provenance list.
+
+This fork is likewise AGPL-3.0-or-later. Copyright in the original work remains
+with the upstream authors; modifications are copyright their respective authors.
+If you run a modified version as a network service, AGPL section 13 requires you
+to offer its source to your users.
