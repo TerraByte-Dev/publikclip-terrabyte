@@ -119,8 +119,11 @@ class ScoreStage(Stage):
             }
             try:
                 t1 = client.generate_json(rubric.t1_prompt(labeled, context), rubric.T1_SCHEMA)
-            except llm_mod.LlmError:
-                raise
+            except llm_mod.LlmError as err:
+                # Bad key, dead daemon, timeout: every remaining candidate would
+                # fail the same way. Abort as StageError so the message reaches
+                # the user instead of dying as an unhandled LlmError.
+                raise StageError(str(err)) from err
             except Exception as err:  # noqa: BLE001
                 ctx.emit(-1, f"moment {i + 1} scoring failed, skipping: {err}")
                 continue

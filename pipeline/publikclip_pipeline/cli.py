@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import traceback
 
 from . import config
 from .jobs import queue
@@ -97,16 +98,52 @@ def cmd_resume(args: argparse.Namespace) -> int:
     return _execute(job, args.jsonl)
 
 
+def _preflight(job: queue.Job, stages: list[queue.Stage]) -> str | None:
+    """Reach the LLM before the CPU-bound stages, not after them.
+
+    Scoring is stage 6 of 8, so a missing Gemini key or a stopped Ollama daemon
+    otherwise surfaces only once ingest, ASR, diarize and events have already
+    burned their wall-clock. Skipped when score is already checkpointed, so
+    resuming into camera/render never needs a backend."""
+    from .scoring import llm as llm_mod
+
+    score = next((s for s in stages if s.name == "score"), None)
+    if score is None or queue.read_checkpoint(job, score.name, score.schema_version) is not None:
+        return None
+    settings = config.Settings.from_json(json.loads(job.settings_json))
+    try:
+        llm_mod.make_client(settings.llm_mode)
+    except llm_mod.LlmError as err:
+        return f"score: {err}"
+    return None
+
+
 def _execute(job: queue.Job, jsonl: bool) -> int:
     emit = _progress_printer(jsonl)
     if jsonl:
         print(json.dumps({"event": "job", "job_id": job.id, "dir": str(job.dir)}), flush=True)
     else:
         print(f"job {job.id} → {job.dir}", file=sys.stderr)
+    stages = _stages()
+    problem = _preflight(job, stages)
+    if problem:
+        queue.set_job_status(job.id, "failed", problem)
+        _emit_result(jsonl, {"ok": False, "job_id": job.id, "error": problem})
+        return 1
     try:
-        results = queue.run_stages(job, _stages(), emit)
+        results = queue.run_stages(job, stages, emit)
     except queue.StageError as err:
         _emit_result(jsonl, {"ok": False, "job_id": job.id, "error": str(err)})
+        return 1
+    except Exception as err:  # noqa: BLE001
+        # A crash is still a result. Without this the process just dies: the
+        # app sees a dead pipe, has no error to show, and falls back to "the
+        # pipeline exited unexpectedly" while the real cause goes to a stderr
+        # the Tauri shell throws away.
+        traceback.print_exc(file=sys.stderr)
+        _emit_result(
+            jsonl, {"ok": False, "job_id": job.id, "error": f"{type(err).__name__}: {err}"}
+        )
         return 1
     summary = {
         "ok": True,

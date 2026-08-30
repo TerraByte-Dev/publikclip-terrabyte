@@ -6,6 +6,7 @@ export interface PipelineEvent {
   job_id?: string
   ok?: boolean
   error?: string
+  stderr?: string
   [key: string]: unknown
 }
 
