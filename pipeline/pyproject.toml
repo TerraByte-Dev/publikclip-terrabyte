@@ -14,7 +14,11 @@ dependencies = [
     "scenedetect>=0.6.4",
     "scikit-learn>=1.5",
     "scipy>=1.14",
-    "speechbrain>=1.0",
+    # speechbrain 1.1.0 fails to import its wav2vec2 lobe via a lazy import of the
+    # optional speechbrain.integrations.k2_fsa, and k2 publishes no Windows wheels.
+    # The failure is silent: SER arousal scoring falls back to the DSP proxy and the
+    # run still succeeds, just with worse scores. 1.0.3 imports fine.
+    "speechbrain>=1.0,<1.1",
     "torchlibrosa>=0.1.0",
     "whisperx==3.8.6",
 ]
