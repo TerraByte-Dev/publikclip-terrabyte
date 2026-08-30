@@ -1,6 +1,6 @@
 /* ============================================================
    publikclip — "the editing bay"
-   Broadcast-monitor charcoal, signal-amber VU accents, ledger
+   Broadcast-monitor charcoal, themeable accent, ledger
    typography. Display: Archivo Black (same face the captions
    burn — the brand IS the captions). Body: Public Sans. Data:
    Martian Mono.
@@ -28,21 +28,82 @@
 
 :root {
   color-scheme: dark;
-  --ink: #0e0f12;          /* the bay */
+  --ink: #0e0f12;          /* the bay - NOTE: this is a BACKGROUND. The
+                              TerraPlayer reference uses --ink for TEXT; same
+                              name, opposite meaning. No [data-theme] block
+                              may ever name it. */
   --panel: #16171b;
   --panel-2: #1c1e23;
   --line: #26282e;
   --text: #ece9e2;         /* warm paper white */
   --dim: #8b8e96;
   --faint: #55585f;
-  --amber: #ffb224;        /* VU signal */
-  --amber-dim: #b97e15;
+  /* THEMED — the only three tokens a [data-theme] block may override. :root IS
+     the 'amber' theme, which is why it has no block below. Alpha variants must
+     be written rgb(var(--accent-rgb) / a): a literal rgba() resolves once and
+     stays orange under all twelve. */
+  --accent: #ffb224;        /* VU signal */
+  --accent-rgb: 255 178 36;
+  --accent-deep: #b97e15;
+
+  /* Ink ON an accent fill. Exactly two consumers, ever: .btn-primary and
+     .play-btn - every other `background: var(--accent)` is textless. Fixed,
+     not themed: 5.19:1 worst case (crimson) across the twelve accents, so one
+     near-black serves all of them. */
+  --on-accent: #14100a;
+
+  /* SEMANTICS - deliberately theme-invariant. "red = destroyed" is learned
+     once; a red that moves per theme is worse than one that briefly resembles
+     the accent. Where that resemblance matters the fix is a form channel
+     (.led-half, .tl-beep-on, .deck-row.done), never a recolour. */
   --green: #3dd6a3;
   --red: #ff5c49;
   --display: 'Archivo Black', sans-serif;
   --body: 'Public Sans', sans-serif;
   --mono: 'Martian Mono', monospace;
 }
+
+/* ============================================================
+   THEMES - the TerraByte palette, the same twelve as TerraPlayer.
+   A theme overrides THREE tokens and nothing else. Backgrounds,
+   --text/--dim/--faint and the --red/--green semantics never
+   appear here: no per-theme background tuning, no contrast
+   regressions. The alpha variants recolour for free because
+   rgb(var(--accent-rgb) / a) resolves lazily on this same <html>.
+
+   'amber' has no block - it IS :root above (publikclip's own
+   #ffb224, dE00 1.29 from the reference's #FFB000; the tightest
+   gap between two DIFFERENT themes in the set is 10.10).
+
+   --accent-deep is the accent at 72% - the ratio that reproduces
+   this file's own #b97e15 from #ffb224 - lifted per theme only
+   where 72% drops the focus/hover border under 3:1 on --panel-2.
+
+   NOT THEMED, by design: --display/--body/--mono. Archivo Black is
+   the same face the pipeline burns into the video, and the chrome
+   matching the render is the point.
+
+   CONTRAST - measured. The accent is TEXT in ~17 places, several
+   at 10-12px, so 4.5:1 is the bar. Every theme clears it on all
+   three flat grounds; worst cell is crimson on --panel-2 = 4.57:1.
+   TWO constraints follow, both easy to break by accident:
+     1. --panel-2 #1c1e23 is load-bearing. Lightening it pushes
+        crimson under AA.
+     2. Accent text over an accent TINT is the real floor. a=.08 is
+        safe (crimson 4.59); a=.15 is NOT (crimson 4.28) - which is
+        why .chip-accent uses a flat --panel-2.
+   ============================================================ */
+html[data-theme="mainframe"]   { --accent: #00FF88; --accent-rgb: 0 255 136;   --accent-deep: #00b862; }
+html[data-theme="matrix"]      { --accent: #39FF14; --accent-rgb: 57 255 20;   --accent-deep: #29b80e; }
+html[data-theme="ice"]         { --accent: #6FE6FF; --accent-rgb: 111 230 255; --accent-deep: #50a6b8; }
+html[data-theme="aqua"]        { --accent: #1EE8C4; --accent-rgb: 30 232 196;  --accent-deep: #16a78d; }
+html[data-theme="ultraviolet"] { --accent: #A06BFF; --accent-rgb: 160 107 255; --accent-deep: #7b52c4; }
+html[data-theme="synthwave"]   { --accent: #FF3AC8; --accent-rgb: 255 58 200;  --accent-deep: #bb2b93; }
+html[data-theme="vapor"]       { --accent: #FF8AD8; --accent-rgb: 255 138 216; --accent-deep: #b8639c; }
+html[data-theme="crimson"]     { --accent: #FF2E4D; --accent-rgb: 255 46 77;   --accent-deep: #cb253d; }
+html[data-theme="tangerine"]   { --accent: #FF7A18; --accent-rgb: 255 122 24;  --accent-deep: #b85811; }
+html[data-theme="gold"]        { --accent: #E8C46A; --accent-rgb: 232 196 106; --accent-deep: #a78d4c; }
+html[data-theme="slate"]       { --accent: #7FA8D9; --accent-rgb: 127 168 217; --accent-deep: #5b799c; }
 
 html, body, #root { height: 100%; }
 
@@ -56,7 +117,7 @@ body {
 }
 
 .mono { font-family: var(--mono); font-weight: 500; }
-.amber { color: var(--amber); }
+.accent { color: var(--accent); }
 
 /* film grain over everything, very quiet */
 .grain {
@@ -83,17 +144,17 @@ body {
   font-family: var(--display);
   font-size: 14px;
   letter-spacing: 0.06em;
-  background: var(--amber);
-  color: #14100a;
+  background: var(--accent);
+  color: var(--on-accent);
   border: 0;
   padding: 14px 26px;
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
-  box-shadow: 0 0 0 0 rgba(255, 178, 36, 0.35);
+  box-shadow: 0 0 0 0 rgb(var(--accent-rgb) / 0.35);
 }
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 24px -6px rgba(255, 178, 36, 0.45);
+  box-shadow: 0 6px 24px -6px rgb(var(--accent-rgb) / 0.45);
 }
 .btn-primary:disabled { opacity: 0.35; cursor: default; }
 
@@ -128,7 +189,16 @@ body {
   flex: none;
 }
 .led-on { background: var(--green); box-shadow: 0 0 8px rgba(61, 214, 163, 0.7); }
-.led-half { background: var(--amber); box-shadow: 0 0 8px rgba(255, 178, 36, 0.6); }
+/* HALF is a RING, not a differently-coloured disc. .rail-job gates
+   open-vs-resume on this dot alone: .rail-job-hint is opacity:0 until hover
+   and the `partial` class Studio emits has no rule at all, so at rest the 8px
+   hue is the only cue. The accent is dE00 6.4 from --green under 'aqua' and
+   13.3 under 'mainframe'. Fill geometry survives any palette; colour becomes
+   confirmation, not the signal. */
+.led-half {
+  background: none;
+  box-shadow: inset 0 0 0 2px var(--accent), 0 0 8px rgb(var(--accent-rgb) / 0.6);
+}
 .led-off { background: #3a3d44; }
 .led-err { background: var(--red); box-shadow: 0 0 8px rgba(255, 92, 73, 0.7); }
 
@@ -140,7 +210,7 @@ body {
   place-items: center;
   padding: 48px;
   background:
-    radial-gradient(1200px 500px at 85% -10%, rgba(255, 178, 36, 0.07), transparent 60%),
+    radial-gradient(1200px 500px at 85% -10%, rgb(var(--accent-rgb) / 0.07), transparent 60%),
     var(--ink);
 }
 .ob-step {
@@ -157,7 +227,7 @@ body {
   font-family: var(--mono);
   font-size: 12px;
   letter-spacing: 0.2em;
-  color: var(--amber);
+  color: var(--accent);
   margin-bottom: 22px;
   text-transform: uppercase;
 }
@@ -206,7 +276,11 @@ body {
   padding: 3px 8px;
   letter-spacing: 0.08em;
 }
-.chip-amber { background: rgba(255, 178, 36, 0.15); color: var(--amber); }
+/* Flat panel ground, not an accent tint: accent text on rgb(accent/.15) is
+   4.25:1 under ultraviolet and 4.28 under crimson - under AA on a 10px chip.
+   A flat --panel-2 puts crimson at 4.57, the same floor the theme-block
+   comment documents, so there is one number to defend instead of two. */
+.chip-accent { background: var(--panel-2); color: var(--accent); }
 .ob-key-row { display: flex; gap: 8px; margin-top: 14px; }
 .ob-key-row input {
   flex: 1;
@@ -218,7 +292,7 @@ body {
   padding: 10px 12px;
   outline: none;
 }
-.ob-key-row input:focus { border-color: var(--amber-dim); }
+.ob-key-row input:focus { border-color: var(--accent-deep); }
 .ob-fine { font-size: 13px; color: var(--faint); margin-bottom: 26px; }
 
 /* ---------- studio ---------- */
@@ -316,7 +390,7 @@ body {
   padding: 64px 56px;
   overflow-y: auto;
   background:
-    radial-gradient(900px 400px at 100% 0%, rgba(255, 178, 36, 0.05), transparent 60%),
+    radial-gradient(900px 400px at 100% 0%, rgb(var(--accent-rgb) / 0.05), transparent 60%),
     var(--ink);
 }
 .input-heading {
@@ -338,7 +412,7 @@ body {
   outline: none;
   transition: border-color 0.2s;
 }
-.input-row input:focus { border-bottom-color: var(--amber); }
+.input-row input:focus { border-bottom-color: var(--accent); }
 .run-options { display: flex; gap: 34px; margin-top: 20px; flex-wrap: wrap; }
 .opt-group { display: flex; align-items: center; gap: 6px; }
 .opt-label {
@@ -359,7 +433,7 @@ body {
   cursor: pointer;
   transition: all 0.15s;
 }
-.opt-on { border-color: var(--amber); color: var(--amber); background: rgba(255, 178, 36, 0.08); }
+.opt-on { border-color: var(--accent); color: var(--accent); background: rgb(var(--accent-rgb) / 0.08); }
 
 /* the processing deck — VU meter rows */
 .deck {
@@ -377,12 +451,21 @@ body {
   animation: rise 0.4s ease both;
 }
 .deck-name { font-size: 11px; letter-spacing: 0.14em; color: var(--faint); }
-.deck-row.live .deck-name { color: var(--amber); }
-.deck-row.done .deck-name { color: var(--green); }
+.deck-row.live .deck-name { color: var(--accent); }
+/* DONE is --green, LIVE is the themed accent: dE00 6.4 apart under 'aqua',
+   13.3 under 'mainframe', on rows stacked directly on top of each other. The
+   bar column does not rescue it - no stage emits fraction >= 1 itself, only
+   the queue's completion emit does, so a live bar sits ~2px short of a done
+   one. Bullet, not a checkmark: U+2713 is absent from MartianMono-Var.ttf and
+   would fall back mid-column; U+2022 is present. nowrap because the longest
+   label plus the suffix measures 117.5px against a fixed 120px column - a row
+   that reflows on completion is worse than the collision. */
+.deck-row.done .deck-name { color: var(--green); white-space: nowrap; }
+.deck-row.done .deck-name::after { content: '\00a0\2022'; }
 .deck-bar { height: 4px; background: var(--panel-2); overflow: hidden; }
 .deck-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--amber-dim), var(--amber));
+  background: linear-gradient(90deg, var(--accent-deep), var(--accent));
   transition: width 0.4s ease;
 }
 .deck-row.done .deck-fill { background: var(--green); width: 100% !important; }
@@ -414,7 +497,7 @@ body {
   min-height: 100%;
   padding: 30px 44px 60px;
   background:
-    radial-gradient(900px 400px at 0% 0%, rgba(255, 178, 36, 0.05), transparent 55%),
+    radial-gradient(900px 400px at 0% 0%, rgb(var(--accent-rgb) / 0.05), transparent 55%),
     var(--ink);
 }
 .review-head {
@@ -455,8 +538,8 @@ body {
   animation: rise 0.45s ease both;
 }
 .film-card:hover { transform: translateY(-3px); }
-.film-on { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber), 0 10px 30px -12px rgba(255, 178, 36, 0.4); }
-.film-score { font-size: 26px; font-weight: 700; color: var(--amber); }
+.film-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 10px 30px -12px rgb(var(--accent-rgb) / 0.4); }
+.film-score { font-size: 26px; font-weight: 700; color: var(--accent); }
 .film-time { font-size: 10px; color: var(--dim); }
 .film-platform { font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.1em; }
 
@@ -485,7 +568,7 @@ body {
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.26em;
-  color: var(--amber);
+  color: var(--accent);
   margin-bottom: 16px;
 }
 .audit-score-row { display: flex; gap: 30px; align-items: flex-start; margin-bottom: 14px; }
@@ -493,8 +576,8 @@ body {
   font-size: 84px;
   font-weight: 800;
   line-height: 0.9;
-  color: var(--amber);
-  text-shadow: 0 0 40px rgba(255, 178, 36, 0.35);
+  color: var(--accent);
+  text-shadow: 0 0 40px rgb(var(--accent-rgb) / 0.35);
 }
 .audit-platforms { flex: 1; display: flex; flex-direction: column; gap: 8px; padding-top: 8px; max-width: 380px; }
 .platform-row { display: grid; grid-template-columns: 64px 1fr 34px; gap: 12px; align-items: center; }
@@ -502,7 +585,7 @@ body {
 .platform-bar { height: 5px; background: var(--panel-2); }
 .platform-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--amber-dim), var(--amber));
+  background: linear-gradient(90deg, var(--accent-deep), var(--accent));
   animation: fill-in 0.7s cubic-bezier(0.2, 0.9, 0.3, 1) both;
   transform-origin: left;
 }
@@ -560,7 +643,7 @@ body {
 .music-card {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--amber);
+  border-left: 3px solid var(--accent);
   padding: 16px 18px;
   max-width: 560px;
 }
@@ -589,7 +672,7 @@ body {
 .modal {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-top: 3px solid var(--amber);
+  border-top: 3px solid var(--accent);
   max-width: 680px;
   max-height: 85vh;
   overflow-y: auto;
@@ -608,7 +691,7 @@ body {
   border-bottom: 1px solid var(--line);
   animation: rise 0.4s ease both;
 }
-.ig-step-num { font-size: 13px; color: var(--amber); padding-top: 2px; }
+.ig-step-num { font-size: 13px; color: var(--accent); padding-top: 2px; }
 .ig-step-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
 .ig-step-body { font-size: 13px; color: var(--dim); line-height: 1.5; }
 .ig-form { display: grid; gap: 10px; }
@@ -620,12 +703,27 @@ body {
   padding: 12px 14px;
   outline: none;
 }
-.ig-form input:focus { border-color: var(--amber-dim); }
+.ig-form input:focus { border-color: var(--accent-deep); }
 .ig-message { margin-top: 16px; font-size: 12px; color: var(--dim); word-break: break-word; }
 .ig-connected { display: flex; gap: 14px; align-items: flex-start; padding: 10px 0; }
 .ig-user { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
 .ig-hint { font-size: 13px; color: var(--dim); line-height: 1.7; }
-.rail-foot { margin-top: auto; padding: 14px 22px; border-top: 1px solid var(--line); }
+/* Stacked, not inline: .btn-ghost is 12px Martian Mono, whose every advance
+   is 750/1000em = 9.0px, and the rail-foot content box is 219px. The two
+   existing labels are already >=234px of Latin alone, so they wrap raggedly
+   today; a third makes it three lines. align-items:flex-start because
+   blockified flex items keep the UA button{text-align:center} - the default
+   stretch would centre all three labels against a left-aligned rail.
+   margin-top:auto still pins the footer: it is on the flex ITEM, and .rail is
+   the column flex container. */
+.rail-foot {
+  margin-top: auto;
+  padding: 14px 22px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
 
 /* ---------- restyle bar ---------- */
 .restyle-bar {
@@ -652,7 +750,7 @@ body {
 .editor-head { display: flex; align-items: center; gap: 20px; }
 .editor-title { font-size: 12px; color: var(--dim); flex: 1; }
 .editor-render { padding: 12px 22px; font-size: 13px; }
-.editor-msg { font-size: 11px; color: var(--amber); }
+.editor-msg { font-size: 11px; color: var(--accent); }
 .editor-err { font-size: 11px; color: var(--red); }
 .editor-styles { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
@@ -682,7 +780,14 @@ body {
    "dead-space cut" (.tl-cut-on) and two different destructive ops must not
    read alike. */
 .tl-beep { position: absolute; top: 0; height: 12px; background: var(--red); opacity: 0.85; cursor: pointer; z-index: 2; }
-.tl-beep-on { box-shadow: 0 0 0 1px var(--amber); }
+/* Selection needs a channel the theme cannot touch. The old ring was 1px of
+   the accent on a band that composites to #dc5242 - under 'crimson' that is
+   dE00 8.5, so it read as the bar being 2px wider, not as "this one is
+   selected". --text is theme-invariant (dE00 39.5 against the band) and the
+   12px->18px jump carries the state even if colour fails entirely, which
+   matters because this ring is the ONLY thing naming the beep that the
+   "x beep" button will delete. */
+.tl-beep-on { height: 18px; box-shadow: 0 0 0 1px var(--text); }
 .tl-event { position: absolute; top: 4px; font-size: 13px; transform: translateX(-50%); pointer-events: none; }
 .tl-handle {
   position: absolute; top: 0; bottom: 0; width: 12px; margin-left: -6px;
@@ -690,9 +795,9 @@ body {
 }
 .tl-handle::after {
   content: ''; position: absolute; top: 0; bottom: 0; left: 5px; width: 3px;
-  background: var(--amber); box-shadow: 0 0 10px rgba(255,178,36,0.6);
+  background: var(--accent); box-shadow: 0 0 10px rgb(var(--accent-rgb) / 0.6);
 }
-.tl-handle-r::after { background: var(--amber); }
+.tl-handle-r::after { background: var(--accent); }
 
 /* ---------- editable caption strip ---------- */
 .cap-block { display: flex; flex-direction: column; gap: 6px; }
@@ -719,8 +824,8 @@ body {
    the (0,1,0) state classes below, so hovering an edited word erased its
    colour. */
 .cap-w:hover:not(.cap-w-ov):not(.cap-w-del) { border-bottom-color: var(--dim); }
-.cap-w:focus { border-color: var(--amber); background: rgba(255, 178, 36, 0.08); }
-.cap-w-ov { color: var(--amber); border-bottom-color: var(--amber-dim); }
+.cap-w:focus { border-color: var(--accent); background: rgb(var(--accent-rgb) / 0.08); }
+.cap-w-ov { color: var(--accent); border-bottom-color: var(--accent-deep); }
 .cap-w-del { color: var(--red); text-decoration: line-through; border-bottom-color: rgba(255, 92, 73, 0.5); }
 .cap-reset { color: var(--red); border-color: rgba(255, 92, 73, 0.4); }
 
@@ -731,14 +836,14 @@ body {
 }
 .ov-item {
   position: absolute; top: 4px; bottom: 4px;
-  background: rgba(255, 178, 36, 0.16);
-  border: 1px solid var(--amber-dim);
+  background: rgb(var(--accent-rgb) / 0.16);
+  border: 1px solid var(--accent-deep);
   display: flex; align-items: center;
   cursor: grab; overflow: hidden;
 }
-.ov-on { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber); }
+.ov-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .ov-label { font-family: var(--mono); font-size: 9px; color: var(--text); padding: 0 8px; white-space: nowrap; }
-.ov-edge { width: 7px; align-self: stretch; cursor: ew-resize; background: rgba(255,178,36,0.4); flex: none; }
+.ov-edge { width: 7px; align-self: stretch; cursor: ew-resize; background: rgb(var(--accent-rgb) / 0.4); flex: none; }
 .ov-edge-r { margin-left: auto; }
 .ov-actions { display: flex; gap: 8px; }
 .ov-inspector {
@@ -790,8 +895,8 @@ body {
   font-size: 15px;
   width: 42px;
   height: 34px;
-  background: var(--amber);
-  color: #14100a;
+  background: var(--accent);
+  color: var(--on-accent);
   border: 0;
   cursor: pointer;
   line-height: 1;
@@ -831,7 +936,7 @@ body {
   min-height: 100%;
   padding: 28px 40px 60px;
   background:
-    radial-gradient(1100px 460px at 90% -12%, rgba(255, 178, 36, 0.06), transparent 60%),
+    radial-gradient(1100px 460px at 90% -12%, rgb(var(--accent-rgb) / 0.06), transparent 60%),
     var(--ink);
   display: flex;
   flex-direction: column;
@@ -857,7 +962,7 @@ body {
   gap: 16px;
 }
 .loop-head-status .led { margin-right: 6px; }
-.loop-sync-note { font-size: 11px; color: var(--amber); }
+.loop-sync-note { font-size: 11px; color: var(--accent); }
 .loop-dim { color: var(--dim); font-weight: 400; }
 .loop-caption {
   font-size: 12px;
@@ -885,7 +990,7 @@ body {
 .loop-consts { display: flex; gap: 14px; flex-wrap: wrap; }
 .loop-const { font-size: 11px; color: var(--dim); display: inline-flex; gap: 6px; align-items: baseline; }
 .loop-const b { color: var(--text); }
-.loop-const b.amber { color: var(--amber); }
+.loop-const b.accent { color: var(--accent); }
 .loop-const s { font-size: 10px; }
 .loop-calib-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-size: 12px; }
 .loop-progress { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
@@ -893,7 +998,7 @@ body {
 .loop-progress-bar {
   width: 220px; height: 4px; background: var(--panel-2); border: 1px solid var(--line);
 }
-.loop-progress-bar div { height: 100%; background: var(--amber); transition: width 0.4s ease; }
+.loop-progress-bar div { height: 100%; background: var(--accent); transition: width 0.4s ease; }
 .loop-changelog {
   background: var(--panel-2);
   border: 1px solid var(--line);
@@ -905,7 +1010,7 @@ body {
   gap: 6px;
 }
 .loop-changelog p { font-size: 10px; color: var(--dim); }
-.loop-changelog b { color: var(--amber); }
+.loop-changelog b { color: var(--accent); }
 
 /* unlinked tray */
 .loop-tray { display: flex; flex-direction: column; gap: 12px; }
@@ -983,7 +1088,7 @@ body {
 .loop-col-summary { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .loop-subchips { display: flex; gap: 10px; font-size: 9px; color: var(--dim); flex-wrap: wrap; }
 .loop-col-score { display: flex; flex-direction: column; }
-.loop-col-score b { font-size: 18px; color: var(--amber); }
+.loop-col-score b { font-size: 18px; color: var(--accent); }
 .loop-col-score .loop-dim { font-size: 9px; }
 .loop-col-views { display: flex; flex-direction: column; }
 .loop-col-views b { font-size: 16px; }
@@ -993,7 +1098,7 @@ body {
 .loop-col-trend .loop-dim { font-size: 9px; }
 .loop-spark-empty { color: var(--faint); }
 .loop-col-status { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
-.loop-settling { font-size: 10px; color: var(--amber); display: inline-flex; align-items: center; gap: 5px; }
+.loop-settling { font-size: 10px; color: var(--accent); display: inline-flex; align-items: center; gap: 5px; }
 
 /* clip picker modal */
 .loop-picker { max-width: 720px; width: 92vw; }
@@ -1017,7 +1122,96 @@ body {
   color: var(--text);
   text-align: left;
 }
-.loop-pick:hover { border-color: var(--amber-dim); }
+.loop-pick:hover { border-color: var(--accent-deep); }
 .loop-pick img { width: 44px; height: 78px; object-fit: cover; border: 1px solid var(--line); flex: none; }
 .loop-pick-meta { display: flex; flex-direction: column; gap: 4px; font-size: 11px; min-width: 0; }
-.loop-pick-meta .mono { color: var(--amber); font-size: 12px; }
+.loop-pick-meta .mono { color: var(--accent); font-size: 12px; }
+
+
+/* ---------- settings modal ---------- */
+/* .modal is a shrink-to-fit grid item inside .modal-scrim's place-items:center,
+   and `repeat(auto-fill,...)` resolves to ONE repetition under an indefinite
+   width - so the grid cannot widen the modal that sizes it. Pin the width the
+   way .loop-picker already does, or the picker collapses to 1-up x 12 rows. */
+.modal-settings { width: 100%; }
+
+.theme-grid {
+  /* 3-up in the content box; falls to 2 if the modal ever narrows. Twelve
+     cards do not fit the 620px minimum window height - .modal already scrolls,
+     which is the intended behaviour here, not overflow. */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  text-align: left;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  /* UA button font is not inherited - same reason .rail-job sets it. */
+  font-family: var(--body);
+  padding: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+/* :not() is load-bearing, same trap as .cap-w: a bare .theme-card:hover is
+   (0,2,0) and beats the (0,1,0) .theme-on below, so hovering the selected
+   card would downgrade its border. */
+.theme-card:hover:not(.theme-on) { border-color: var(--accent-deep); }
+.theme-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* The preview sits on the bay charcoal, never on a per-theme background:
+   backgrounds do not recolour, so a card that faked one would advertise a
+   change that never happens. Its own dot class, not .led - .led is the state
+   vocabulary (on/half/off/err) and the picker must not speak it. */
+.theme-swatch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--ink);
+  border: 1px solid var(--line);
+  padding: 7px 8px;
+}
+.theme-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.theme-bar { flex: 1; height: 4px; background: var(--panel-2); overflow: hidden; }
+.theme-bar > span { display: block; height: 100%; width: 72%; }
+.theme-name { font-size: 11px; }
+.theme-on .theme-name { color: var(--accent); }
+.theme-blurb { font-size: 10px; line-height: 1.35; color: var(--faint); }
+
+.set-rows { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.set-label { font-size: 13px; }
+.set-help { font-size: 11px; color: var(--faint); margin-top: 3px; }
+
+/* ---------- display toggles ----------
+   <html> classes, set by src/theme.ts before first paint. One class kills all
+   six .grain instances with no TSX churn. */
+html.grain-off .grain { display: none; }
+
+/* The two that matter are the infinite loops - grain-shift and sweep never
+   stop. The entrances go too, so the app is consistently still rather than
+   half-animated; `rise` (opacity 0->1) and `fill-in` (scaleX 0->1) both rest
+   at the element's own computed style, so nothing disappears. */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation: none !important;
+  transition: none !important;
+}
+/* Except this one: .deck-fill.indeterminate declares its own width:30% and
+   depends on `sweep` to move it. Frozen at 30% it reads as a stalled stage,
+   so show the whole bar, held. Studio passes style={undefined} in the
+   indeterminate branch, so no inline width outranks this. */
+html.reduce-motion .deck-fill.indeterminate { width: 100%; opacity: 0.45; }

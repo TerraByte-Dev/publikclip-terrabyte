@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { confirm } from '@tauri-apps/plugin-dialog'
 import type { JobSummary } from '../types'
 import KeyModal from './KeyModal'
+import SettingsModal from './SettingsModal'
 
 const STAGE_ORDER = [
   'ingest', 'asr', 'diarize', 'events', 'candidates', 'score', 'camera', 'render'
@@ -37,6 +38,7 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
   const [llm, setLlm] = useState('gemini')
   const [captions, setCaptions] = useState('classic')
   const [showKey, setShowKey] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   async function askDelete(job: JobSummary) {
     const label = job.title ?? job.id
@@ -55,6 +57,7 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
     <div className="studio">
       <div className="grain" />
       {showKey && <KeyModal onClose={() => setShowKey(false)} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       <aside className="rail">
         <header className="rail-brand">
           <span className="rail-logo">publikclip</span>
@@ -106,13 +109,16 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
           <button className="btn-ghost" onClick={onOpenLoop}>
             ⟳ instagram loop
           </button>
+          <button className="btn-ghost" onClick={() => setShowSettings(true)}>
+            ⚙ settings
+          </button>
         </footer>
       </aside>
 
       <main className="stage-area">
         <section className="input-block">
           <h1 className="input-heading">
-            FEED IT<span className="amber"> AN HOUR.</span>
+            FEED IT<span className="accent"> AN HOUR.</span>
           </h1>
           <div className="input-row">
             <input
