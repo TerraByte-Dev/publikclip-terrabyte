@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { api } from '../api'
@@ -20,15 +20,18 @@ interface OverlayItem {
 interface EditState {
   start: number; end: number
   caption_preset: string | null; camera_mode: string | null
-  remove_dead_space: boolean; disabled_cuts: number[]
+  remove_dead_space: boolean
+  disabled_cuts: number[]                    // SOURCE start times, not indices
   overlays: OverlayItem[]
+  caption_overrides: Record<string, string>  // key = SOURCE start in whole ms
+  beeps: { start: number; end: number }[]    // SOURCE seconds
 }
 interface EditContext {
   ok: boolean
   window: { start: number; end: number }
   media_path: string
   probe: { width: number; height: number }
-  trajectory: { fps: number; frames: number[][] } | null
+  trajectory: { fps: number; frames: number[][]; clip_start: number } | null
   edit: EditState
   words: Word[]
   rms: number[]
@@ -48,6 +51,68 @@ function fmt(t: number): string {
   return `${m}:${s.padStart(4, '0')}`
 }
 
+// Caption-override key: the word's SOURCE start in whole ms. asr/stage.py is
+// the only site that writes a word start and it rounds to 3 dp, so this integer
+// is exact and identical in JS and Python — 4831 words across 5 jobs, zero
+// mismatches, zero collisions.
+const wordKey = (start: number) => String(Math.round(start * 1000))
+// disabled_cuts key: the cut's SOURCE start at 3 dp, matching
+// detect_dead_space's own rounding. Never a list index — render_clip re-derives
+// the cut list from the EDITED bounds, so a position key retargets onto a
+// different pause.
+const cutKey = (start: number) => Math.round(start * 1000) / 1000
+
+/**
+ * Every in-bounds word as an editable chip — the same filter caption_words
+ * uses, so what you see is what burns in. Type to retext, clear to drop the
+ * word, focus a chip to seek the player to it.
+ *
+ * Memoized on purpose: the parent's rAF loop calls setTimeLabel every frame and
+ * a 90 s clip is ~250 controlled inputs. Every prop below is referentially
+ * stable across that churn (both callbacks are useCallback with [] deps, seekTo
+ * already is), so the memo actually holds.
+ */
+const CaptionStrip = memo(function CaptionStrip({
+  words, start, end, overrides, onEdit, onCommit, onSeek
+}: {
+  words: Word[]
+  start: number
+  end: number
+  overrides: Record<string, string>
+  onEdit: (key: string, text: string | null) => void
+  onCommit: () => void
+  onSeek: (t: number) => void
+}) {
+  return (
+    <div className="cap-strip">
+      {words
+        .filter((w) => w.start >= start && w.start < end)
+        .map((w) => {
+          const key = wordKey(w.start)
+          const ov = overrides[key]
+          const value = ov === undefined ? w.word : ov
+          const state = ov === undefined ? '' : ov.trim() === '' ? ' cap-w-del' : ' cap-w-ov'
+          return (
+            <input
+              key={key}
+              className={`cap-w${state}`}
+              value={value}
+              size={Math.max(2, value.length)}
+              spellCheck={false}
+              placeholder="·"
+              title={`"${w.word}" @ ${fmt(w.start)} — retype it, or clear it to drop the word`}
+              onFocus={() => onSeek(w.start)}
+              // typing the original back deletes the key rather than storing a
+              // no-op override that would outlive a re-transcribe
+              onChange={(e) => onEdit(key, e.target.value === w.word ? null : e.target.value)}
+              onBlur={onCommit}
+            />
+          )
+        })}
+    </div>
+  )
+})
+
 interface Props {
   jobId: string
   clipIndex: number
@@ -63,6 +128,7 @@ export default function ClipEditor({ jobId, clipIndex, onClose, onRendered }: Pr
   const [suggesting, setSuggesting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedOverlay, setSelectedOverlay] = useState<string | null>(null)
+  const [selectedBeep, setSelectedBeep] = useState<number | null>(null)
   const railRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ kind: string; id?: string; edge?: 'l' | 'r' } | null>(null)
   const monitorDragRef = useRef<{ id: string; el: HTMLImageElement } | null>(null)
@@ -175,9 +241,14 @@ export default function ClipEditor({ jobId, clipIndex, onClose, onRendered }: Pr
           const traj = c.trajectory
           let crop: number[]
           if (traj && traj.frames.length) {
+            // index from the trajectory's OWN anchor, not edit.start: this
+            // is the RUN's trajectory and the preview never re-directs it, so
+            // a trimmed in-point would offset the lookup by
+            // (edit.start - clip_start) * fps — measured at 229px of crop-x
+            // error on a 426px pan after a 4s trim, i.e. the wrong speaker.
             const idx = Math.max(
               0,
-              Math.min(traj.frames.length - 1, Math.round((t - e.start) * traj.fps))
+              Math.min(traj.frames.length - 1, Math.round((t - traj.clip_start) * traj.fps))
             )
             crop = traj.frames[idx]
           } else {
@@ -192,13 +263,18 @@ export default function ClipEditor({ jobId, clipIndex, onClose, onRendered }: Pr
           v.style.transform = `translate(${-cx * s}px, ${-cy * s}px)`
           void cw
         }
+        // Deliberate: this setState also drives the overlay preview below,
+        // which reads v.currentTime at render time to decide visibility.
+        // fmt() quantises to 0.1s, so React's same-value bailout leaves ~20
+        // renders per 60 frames, not 60. A ref'd label span would be cheaper
+        // and would FREEZE the overlay preview.
         setTimeLabel(`${fmt(t)} / out ${fmt(e.end)}`)
         if (!v.paused) {
           // skip active dead-space cuts during preview playback
           if (e.remove_dead_space) {
             for (let i = 0; i < cutsRef.current.length; i++) {
               const c = cutsRef.current[i]
-              if (!c.kept && !e.disabled_cuts.includes(i) && t >= c.start && t < c.end - 0.05) {
+              if (!c.kept && !e.disabled_cuts.includes(cutKey(c.start)) && t >= c.start && t < c.end - 0.05) {
                 v.currentTime = c.end
                 break
               }
@@ -300,9 +376,21 @@ export default function ClipEditor({ jobId, clipIndex, onClose, onRendered }: Pr
       })
     }
     function onUp() {
-      if (monitorDragRef.current && editRef.current) {
-        void persist(editRef.current)
-      }
+      // Every drag that mutated `edit` must be written back, not just the
+      // monitor drag. 'scrub' is the only kind that touches nothing; a bounds
+      // trim or an overlay-rail move used to live in React state alone and die
+      // on '← clips', since Review unmounts the editor with no flush and the
+      // next open reloads from clip_edits.json. It only ever survived by
+      // accident — persist() sends the whole EditState, so any later style
+      // click laundered the pending drag to disk. One save per mouse-release,
+      // not per mousemove, so drag smoothness is untouched.
+      const kind = dragRef.current?.kind
+      const mutated =
+        monitorDragRef.current !== null ||
+        kind === 'bound-l' ||
+        kind === 'bound-r' ||
+        kind === 'ov'
+      if (mutated && editRef.current) void persist(editRef.current)
       dragRef.current = null
       monitorDragRef.current = null
     }
@@ -319,6 +407,42 @@ export default function ClipEditor({ jobId, clipIndex, onClose, onRendered }: Pr
   async function persist(next: EditState) {
     setEdit(next)
     await invoke('save_clip_edits', { jobId, edits: { [String(clipIndex)]: next } })
+  }
+
+  // Text lives in React state while you type; one save on blur. Functional
+  // setEdit + empty deps keeps both callbacks referentially stable, which is
+  // what lets CaptionStrip's memo survive the time-label re-render.
+  const onCaptionEdit = useCallback((key: string, text: string | null) => {
+    setEdit((cur) => {
+      if (!cur) return cur
+      const next = { ...cur.caption_overrides }
+      if (text === null) delete next[key]
+      else next[key] = text
+      return { ...cur, caption_overrides: next }
+    })
+  }, [])
+
+  const onCaptionCommit = useCallback(() => {
+    if (!editRef.current) return
+    void invoke('save_clip_edits', { jobId, edits: { [String(clipIndex)]: editRef.current } })
+  }, [jobId, clipIndex])
+
+  function addBeep() {
+    if (!edit || !ctx) return
+    // currentTime is 0 until the media loads, and the context window reaches
+    // 45s either side of the clip — unclamped, a t of 0 snapped to a word up to
+    // 44s before the in-point, where render_clip's [start, end) filter drops
+    // it. Clamp, THEN snap: a bleep covers a WORD, and a 0.18s median word is
+    // ~3px on a 77s rail. Nobody can place that by hand, which is why a beep
+    // has no drag handles — to cover two words, click each; adjacent spans
+    // concat at render.
+    const t = Math.min(Math.max(videoRef.current?.currentTime ?? 0, edit.start), edit.end)
+    const w =
+      ctx.words.find((x) => x.start <= t && t < x.end) ??
+      ctx.words.find((x) => x.start >= t && x.start < edit.end)
+    if (!w) return
+    setSelectedBeep(edit.beeps.length)
+    void persist({ ...edit, beeps: [...edit.beeps, { start: w.start, end: w.end }] })
   }
 
   async function doRender() {
@@ -462,6 +586,21 @@ export default function ClipEditor({ jobId, clipIndex, onClose, onRendered }: Pr
         >
           ✂ remove dead space
         </button>
+        <button className="opt" style={{ marginLeft: 14 }} onClick={addBeep}>
+          🔇 beep this word
+        </button>
+        {selectedBeep !== null && edit.beeps[selectedBeep] && (
+          <button
+            className="opt ov-delete"
+            onClick={() => {
+              const i = selectedBeep
+              setSelectedBeep(null)
+              void persist({ ...edit, beeps: edit.beeps.filter((_, k) => k !== i) })
+            }}
+          >
+            ✕ beep
+          </button>
+        )}
       </div>
 
       {/* timeline */}
@@ -486,7 +625,8 @@ export default function ClipEditor({ jobId, clipIndex, onClose, onRendered }: Pr
         {/* dead-space cuts */}
         {edit.remove_dead_space &&
           activeCuts.map((c, i) => {
-            const disabled = edit.disabled_cuts.includes(i)
+            const key = cutKey(c.start)
+            const disabled = edit.disabled_cuts.includes(key)
             const active = !c.kept && !disabled
             return (
               <div
@@ -496,9 +636,11 @@ export default function ClipEditor({ jobId, clipIndex, onClose, onRendered }: Pr
                 title={`${c.reason} — click to ${active ? 'keep' : 'cut'}`}
                 onClick={() => {
                   if (c.kept) return
+                  // key by SOURCE start time, not list position: the
+                  // renderer re-derives the cut list from the edited bounds
                   const next = disabled
-                    ? edit.disabled_cuts.filter((d) => d !== i)
-                    : [...edit.disabled_cuts, i]
+                    ? edit.disabled_cuts.filter((d) => d !== key)
+                    : [...edit.disabled_cuts, key]
                   persist({ ...edit, disabled_cuts: next })
                 }}
               />
@@ -529,6 +671,23 @@ export default function ClipEditor({ jobId, clipIndex, onClose, onRendered }: Pr
           </span>
         ))}
 
+        {/* censor beeps — SOURCE seconds, so toPx applies straight (unlike
+            overlays, which are output-relative and offset by edit.start). They
+            live inside .timeline because fromClientX measures railRef; drawn
+            in .ov-rail their geometry would be wrong by tens of seconds. */}
+        {edit.beeps.map((b, i) => (
+          <div
+            key={i}
+            className={`tl-beep ${selectedBeep === i ? 'tl-beep-on' : ''}`}
+            style={{ left: `${toPx(b.start)}%`, width: `${Math.max(0.3, toPx(b.end) - toPx(b.start))}%` }}
+            title={`beep ${fmt(b.start)}–${fmt(b.end)} — click to select, then ✕ beep`}
+            onMouseDown={(e) => {
+              e.stopPropagation()   // .timeline's own mousedown starts a scrub
+              setSelectedBeep(i)
+            }}
+          />
+        ))}
+
         {/* bounds handles */}
         <div
           className="tl-handle"
@@ -545,6 +704,33 @@ export default function ClipEditor({ jobId, clipIndex, onClose, onRendered }: Pr
             e.stopPropagation()
             dragRef.current = { kind: 'bound-r' }
           }}
+        />
+      </div>
+
+      {/* editable captions — the actual burned-in words, in bounds only */}
+      <div className="cap-block">
+        <div className="cap-head">
+          <span className="opt-label">caption text</span>
+          <span className="mono cap-count">
+            {Object.keys(edit.caption_overrides).length} edited · clear a word to drop it · beeped words mask automatically
+          </span>
+          {Object.keys(edit.caption_overrides).length > 0 && (
+            <button
+              className="opt cap-reset"
+              onClick={() => persist({ ...edit, caption_overrides: {} })}
+            >
+              reset text
+            </button>
+          )}
+        </div>
+        <CaptionStrip
+          words={ctx.words}
+          start={edit.start}
+          end={edit.end}
+          overrides={edit.caption_overrides}
+          onEdit={onCaptionEdit}
+          onCommit={onCaptionCommit}
+          onSeek={seekTo}
         />
       </div>
 

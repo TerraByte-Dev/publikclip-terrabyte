@@ -48,7 +48,7 @@ def test_keep_ranges_and_disable():
     ranges = tl.keep_ranges(10.0, 30.0, cuts)
     assert ranges == [(10.0, 12.0), (14.0, 20.0), (21.0, 30.0)]
     # user re-enables the first cut region
-    ranges2 = tl.keep_ranges(10.0, 30.0, cuts, disabled=[0])
+    ranges2 = tl.keep_ranges(10.0, 30.0, cuts, disabled=[12.0])
     assert ranges2 == [(10.0, 20.0), (21.0, 30.0)]
 
 

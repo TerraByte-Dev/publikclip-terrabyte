@@ -255,6 +255,25 @@ fn list_job_dirs() -> Result<Vec<Value>, String> {
     Ok(out)
 }
 
+/// The only destructive filesystem op in the app, so `job_id` is never trusted
+/// as a path component: `jobs.join("..")` walks out of the root and
+/// `jobs.join("C:/Windows")` REPLACES it outright (both slash directions),
+/// while `jobs.join("")` yields the jobs root itself. Real ids come from
+/// jobs/queue.py as `%Y%m%d-%H%M%S` + 6 hex chars, so anything outside
+/// [A-Za-z0-9-] is refused before a path is ever built. Windows device names
+/// pass the whitelist but `!dir.exists()` stops them.
+#[tauri::command]
+fn delete_job(job_id: String) -> Result<(), String> {
+    if job_id.is_empty() || !job_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return Err(format!("refusing to delete {job_id:?}: not a job id"));
+    }
+    let dir = home_dir().join("jobs").join(&job_id);
+    if !dir.exists() {
+        return Err(format!("no job dir for {job_id}"));
+    }
+    fs::remove_dir_all(&dir).map_err(|e| format!("could not delete {job_id}: {e}"))
+}
+
 #[tauri::command]
 fn save_gemini_key(key: String) -> Result<bool, String> {
     let home = home_dir();
@@ -328,17 +347,16 @@ async fn edit_tool(app: AppHandle, args: Vec<String>) -> Result<Value, String> {
     let line = stdout.lines().rev().find(|l| l.trim_start().starts_with('{'));
     match line.and_then(|l| serde_json::from_str::<Value>(l).ok()) {
         Some(v) => {
-            // The source video lives wherever the user keeps it - Downloads,
-            // Desktop, an SD card - and essentially never under the
-            // assetProtocol scope ($HOME/.publikclip/**), because ingesting a
-            // local file leaves media_path at the original location. The asset
-            // protocol then answers every ClipEditor <video> request with 403:
-            // loadedmetadata never fires, videoWidth stays 0, and the whole
-            // crop/monitor rAF block never runs - so the editor looks broken
-            // while its timeline, which comes over IPC, draws fine.
-            //
-            // A wider glob cannot fix this: a card ingest is off $HOME
-            // entirely. Grant exactly the one file the editor is opening.
+            // The source video lives wherever the user keeps it — Downloads,
+            // Desktop, an E:\ card — never under tauri.conf.json's
+            // assetProtocol scope ($HOME/.publikclip/**). All 7 job dirs on
+            // this machine point outside it, so protocol/asset.rs answered
+            // every ClipEditor <video> request with 403: loadedmetadata never
+            // fired, videoWidth stayed 0, and the whole crop/monitor rAF block
+            // never ran — the editor looked half-broken while its timeline,
+            // which comes over IPC, drew fine. A wider glob cannot fix this:
+            // an E:\ card ingest is outside $HOME entirely. So grant exactly
+            // the one file the editor is about to open, on every open.
             // suggest-visuals returns no media_path, so the `if let` skips it.
             if let Some(media) = v.get("media_path").and_then(Value::as_str) {
                 let _ = app.asset_protocol_scope().allow_file(media);
@@ -499,6 +517,7 @@ fn main() {
             resume_job,
             job_results,
             list_job_dirs,
+            delete_job,
             save_gemini_key,
             get_setup_state,
             mark_onboarded,

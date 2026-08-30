@@ -117,6 +117,28 @@ export default function App() {
     if (r.render?.outputs?.length) setView('review')
   }, [])
 
+  const deleteJob = useCallback(
+    async (jobId: string) => {
+      try {
+        await api.deleteJob(jobId)
+      } catch (e) {
+        // Windows holds the dir open while the sidecar is writing into it;
+        // surface the failure instead of an unhandled rejection nobody sees.
+        setRunError(String(e))
+        return
+      }
+      // Review's back button leaves activeJob pointing at the job it was
+      // showing, and activeJob still feeds the result-handler's jobResults
+      // call. Drop it. No setView needed — the rail only renders in 'studio'.
+      if (activeJobRef.current === jobId) {
+        setActiveJob(null)
+        setResults(null)
+      }
+      refreshJobs()
+    },
+    [refreshJobs]
+  )
+
   if (view === 'boot') return <div className="boot" />
 
   if (view === 'onboarding' && setup) {
@@ -164,6 +186,7 @@ export default function App() {
       onRun={startRun}
       onOpenLoop={() => setView('loop')}
       onOpenJob={openJob}
+      onDelete={deleteJob}
       onResume={(id, llm) => {
         setRunning(true)
         setRunError(null)

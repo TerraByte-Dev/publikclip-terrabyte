@@ -49,6 +49,25 @@ class Overlay:
 
 
 @dataclass
+class Beep:
+    """A censor bleep. start/end are SOURCE seconds — the ClipEdit.start/end
+    timeline, NOT Overlay's output-relative one. A bleep is glued to a spoken
+    word and words live in source time. Measured on job 20260829-230922-72c76b
+    clip 1 (168.0-207.884; with dead space on, output_duration 14.387): a beep
+    on "killing yourself." at src 200.896-201.477 stored output-relative reads
+    32.896 — 18.5 s past the end of a 14.387 s output, i.e. parked on the final
+    frame. Source-timed, the same remap that moves the captions puts it at
+    7.399-7.980, dead on the word. A bound-l drag must not move it either: the
+    word did not move."""
+
+    start: float
+    end: float
+
+    def to_json(self) -> dict:
+        return self.__dict__.copy()
+
+
+@dataclass
 class ClipEdit:
     """Per-clip overrides. Absent fields fall back to the run's globals."""
 
@@ -57,25 +76,45 @@ class ClipEdit:
     caption_preset: str | None = None
     camera_mode: str | None = None
     remove_dead_space: bool = False
-    disabled_cuts: list[int] = field(default_factory=list)  # indices into auto cuts
+    # SOURCE start times of protected cuts, NOT list positions — render_clip
+    # re-runs detect_dead_space against the *edited* bounds, so a position key
+    # retargets silently. Measured on job 20260826-133205-5dac28 clip 0:
+    # trimming the in-point 839.440 -> 853.0 takes the cut list 11 -> 10 entries
+    # and slides index 6 off the 1.6 s silence the user protected onto an
+    # already-kept 0.8 s pause — the render comes out identical to disabled=[].
+    disabled_cuts: list[float] = field(default_factory=list)
     overlays: list[Overlay] = field(default_factory=list)
+    # Manual caption text, keyed by the word's SOURCE start in whole ms.
+    # asr/stage.py is the only site that writes a word start and it rounds to
+    # 3 dp, so the key is exact and identical in JS and Python — 4831 words
+    # across 5 jobs, zero mismatches, zero collisions (smallest onset gap 40 ms).
+    # Stable across a re-render, a bounds drag, a dead-space toggle and a preset
+    # change; NOT across a re-run of diarize, which renumbers every word and
+    # orphans the overrides (benign — they stop matching, the ASR text returns).
+    # A blank value drops the word from the burn-in.
+    caption_overrides: dict[str, str] = field(default_factory=dict)
+    beeps: list[Beep] = field(default_factory=list)  # SOURCE seconds
 
     def to_json(self) -> dict:
         d = self.__dict__.copy()
         d["overlays"] = [o.to_json() for o in self.overlays]
+        d["beeps"] = [b.to_json() for b in self.beeps]
         return d
 
     @classmethod
     def from_json(cls, data: dict) -> "ClipEdit":
         overlays = [Overlay(**o) for o in data.get("overlays", [])]
+        beeps = [Beep(**b) for b in data.get("beeps", [])]
         return cls(
             start=float(data["start"]),
             end=float(data["end"]),
             caption_preset=data.get("caption_preset"),
             camera_mode=data.get("camera_mode"),
             remove_dead_space=bool(data.get("remove_dead_space", False)),
-            disabled_cuts=list(data.get("disabled_cuts", [])),
+            disabled_cuts=[float(x) for x in data.get("disabled_cuts", [])],
             overlays=overlays,
+            caption_overrides=dict(data.get("caption_overrides") or {}),
+            beeps=beeps,
         )
 
 
@@ -134,14 +173,24 @@ def keep_ranges(
     clip_start: float,
     clip_end: float,
     cuts: list[dict],
-    disabled: list[int] | None = None,
+    disabled: list[float] | None = None,
 ) -> list[tuple[float, float]]:
     """Source-time ranges that survive: the clip minus active (kept=False,
-    not user-disabled) cuts. Always returns ≥1 range."""
-    disabled = set(disabled or [])
+    not user-disabled) cuts. Always returns ≥1 range.
+
+    `disabled` holds cut START TIMES, not list positions (see ClipEdit).
+    detect_dead_space rounds kept=False cut starts to 3 dp and this filter only
+    ever inspects those, so exact float equality on the key is safe.
+
+    Residual: the LEADING cut starts at clip_start + BREATH_PAD, so its key
+    moves with the in-point — nudging the in-point drops a protection on it.
+    That fails safe (reverts to cutting) rather than protecting a different
+    pause."""
+    disabled = {round(t, 3) for t in (disabled or [])}
     active = [
-        c for i, c in enumerate(cuts)
-        if not c.get("kept") and i not in disabled and c["end"] > clip_start and c["start"] < clip_end
+        c for c in cuts
+        if not c.get("kept") and round(c["start"], 3) not in disabled
+        and c["end"] > clip_start and c["start"] < clip_end
     ]
     active.sort(key=lambda c: c["start"])
     ranges: list[tuple[float, float]] = []

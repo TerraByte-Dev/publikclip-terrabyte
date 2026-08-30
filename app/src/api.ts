@@ -8,6 +8,7 @@ export const api = {
     invoke<void>('resume_job', { jobId, llm, captions, camera }),
   jobResults: (jobId: string) => invoke<JobResults>('job_results', { jobId }),
   listJobs: () => invoke<JobSummary[]>('list_job_dirs'),
+  deleteJob: (jobId: string) => invoke<void>('delete_job', { jobId }),
   saveGeminiKey: (key: string) => invoke<boolean>('save_gemini_key', { key }),
   setupState: () => invoke<SetupState>('get_setup_state'),
   markOnboarded: () => invoke<void>('mark_onboarded'),

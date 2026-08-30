@@ -284,6 +284,32 @@ body {
 }
 .rail-job:hover .rail-job-hint { opacity: 1; }
 
+/* The ✕ is a SIBLING of .rail-job: a <button> cannot nest in a <button>.
+   Hovering it leaves .rail-job:hover, so the row's hover state has to hang off
+   the wrapper or the row flickers to unhovered as you aim at the ✕. */
+.rail-job-wrap { display: flex; align-items: center; }
+.rail-job-wrap .rail-job { min-width: 0; }   /* keep the title ellipsis working */
+.rail-job-wrap:hover .rail-job { background: var(--panel-2); }
+.rail-job-wrap:hover .rail-job-hint { opacity: 1; }
+.rail-job-del {
+  flex: 0 0 22px;
+  background: none; border: 0;
+  color: var(--faint);
+  font-size: 13px; line-height: 1;
+  padding: 6px 0;
+  cursor: pointer;
+  opacity: 0;
+  /* opacity 0 still hit-tests: without this the right 22px of every row would
+     be a permanently live delete target. Falls through to the wrapper, which
+     is what triggers the hover that re-enables it. */
+  pointer-events: none;
+  transition: opacity 0.15s, color 0.15s;
+}
+.rail-job-wrap:hover .rail-job-del,
+.rail-job-del:focus-visible { opacity: 1; pointer-events: auto; }
+.rail-job-del:hover:not(:disabled) { color: var(--red); }
+.rail-job-del:disabled { cursor: default; }
+
 .stage-area {
   position: relative;
   z-index: 2;
@@ -378,6 +404,8 @@ body {
   padding: 16px 18px;
   font-size: 14px;
   line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* ---------- review ---------- */
@@ -649,6 +677,12 @@ body {
 .tl-words { position: absolute; left: 0; right: 0; bottom: 8px; height: 10px; }
 .tl-word { position: absolute; height: 100%; background: var(--dim); opacity: 0.8; border-radius: 1px; }
 .tl-word-out { opacity: 0.25; }
+
+/* Solid bar, deliberately NOT the -45deg red hatch: that hatch already means
+   "dead-space cut" (.tl-cut-on) and two different destructive ops must not
+   read alike. */
+.tl-beep { position: absolute; top: 0; height: 12px; background: var(--red); opacity: 0.85; cursor: pointer; z-index: 2; }
+.tl-beep-on { box-shadow: 0 0 0 1px var(--amber); }
 .tl-event { position: absolute; top: 4px; font-size: 13px; transform: translateX(-50%); pointer-events: none; }
 .tl-handle {
   position: absolute; top: 0; bottom: 0; width: 12px; margin-left: -6px;
@@ -659,6 +693,36 @@ body {
   background: var(--amber); box-shadow: 0 0 10px rgba(255,178,36,0.6);
 }
 .tl-handle-r::after { background: var(--amber); }
+
+/* ---------- editable caption strip ---------- */
+.cap-block { display: flex; flex-direction: column; gap: 6px; }
+.cap-head { display: flex; align-items: center; gap: 10px; }
+.cap-count { font-size: 10px; color: var(--faint); margin-right: auto; }
+.cap-strip {
+  display: flex; flex-wrap: wrap; gap: 3px;
+  /* ~6 rows, then scroll. Chips measure 22px with a 25px row pitch, so 168px
+     is 6.6 rows. Real clips run 25-118 words at ~40 s, so a 90 s clip is ~250
+     chips — uncapped it would push the overlay track and the RE-RENDER button
+     below the fold. */
+  max-height: 168px; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line);
+  padding: 10px 12px;
+}
+.cap-w {
+  font-family: var(--mono); font-size: 12px;
+  background: none; color: var(--text);
+  border: 1px solid transparent; border-bottom: 1px solid var(--line);
+  padding: 3px 5px; min-width: 3ch;
+  outline: none; transition: border-color 0.15s, color 0.15s;
+}
+/* the :not() guards are load-bearing: a bare .cap-w:hover is (0,2,0) and beats
+   the (0,1,0) state classes below, so hovering an edited word erased its
+   colour. */
+.cap-w:hover:not(.cap-w-ov):not(.cap-w-del) { border-bottom-color: var(--dim); }
+.cap-w:focus { border-color: var(--amber); background: rgba(255, 178, 36, 0.08); }
+.cap-w-ov { color: var(--amber); border-bottom-color: var(--amber-dim); }
+.cap-w-del { color: var(--red); text-decoration: line-through; border-bottom-color: rgba(255, 92, 73, 0.5); }
+.cap-reset { color: var(--red); border-color: rgba(255, 92, 73, 0.4); }
 
 .ov-track { display: flex; align-items: center; gap: 12px; }
 .ov-rail {

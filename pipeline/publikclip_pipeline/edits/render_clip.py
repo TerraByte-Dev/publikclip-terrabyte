@@ -19,6 +19,17 @@ from ..render import ffmpeg_bin, renderer
 from . import store
 from .timeline import ClipEdit, TimeRemap, detect_dead_space, keep_ranges
 
+BEEP_HZ = 1000            # the broadcast censor tone: dead centre of the vocal
+                          # band, so it reads as deliberate, not as a fault.
+BEEP_AMPLITUDE = 0.20     # -14.0 dBFS peak, level with the -14 LUFS speech bed
+                          # loudnorm targets. Unmistakable, not painful.
+BEEP_PAD = 0.03           # one audio frame. `enable=` is evaluated per frame,
+                          # and 1024 samples @ 44.1 kHz is 23.2 ms — measured, a
+                          # beep requested at 2.396 s actually gated at 2.415 s,
+                          # leaking the word's first 19 ms. Padded, the mute is
+                          # fully active by 2.372 s. Both edges shift late by the
+                          # same amount, so the window slides rather than shrinks.
+
 
 def _load_stage(job_dir: Path, stage: str) -> dict:
     return json.loads((job_dir / f"{stage}.json").read_text())["data"]
@@ -62,7 +73,20 @@ def context_for_clip(job_dir: Path, clip_idx: int, pad: float = 45.0) -> dict:
         traj_file = cam.get("trajectories", {}).get(str(clip_idx))
         if traj_file and Path(traj_file).exists():
             t = json.loads(Path(traj_file).read_text())
-            trajectory = {"fps": t.get("fps", 25), "frames": t.get("frames", [])}
+            # clip_start is the SOURCE time frame 0 belongs to (camera/stage.py
+            # writes it into every trajectory file). The UI must index from
+            # here, not from edit.start: this is the RUN's trajectory, anchored
+            # to the score bounds, and the preview never re-directs it — so a
+            # trimmed in-point offsets the lookup by (edit.start - clip_start)
+            # * fps, measured at 229 px of crop-x error on a 426 px pan after a
+            # 4 s trim, i.e. the wrong speaker. (The RENDER does re-direct; see
+            # _camera_needs_redirect. This makes the preview read the OLD
+            # trajectory correctly, it does not make it the render's.)
+            trajectory = {
+                "fps": t.get("fps", 25),
+                "frames": t.get("frames", []),
+                "clip_start": t.get("clip_start", clip["start"]),
+            }
 
     return {
         "clip_index": clip_idx,
@@ -168,6 +192,110 @@ def _overlay_filters(overlays, input_offset: int, out_w: int, out_h: int) -> tup
     return inputs, chains, label
 
 
+def _mask_word(text: str) -> str:
+    """Broadcast-style censor for a beeped word. ASCII on purpose: parsing the
+    bundled cmaps, U+25AE and U+2588 are in NONE of Anton (978 cps) / Archivo
+    Black (423) / Inter (2852), and U+25A0 is missing from Archivo Black — the
+    hormozi + karaoke-pop face. A block would therefore render only if the HOST
+    had a fallback font, and libass draws its X-in-a-box notdef when none does.
+    '*' is in all three cmaps: it is the only mask that renders from the fonts
+    we ship.
+
+    Width is NOT preserved — these are proportional faces and '*' is wider than
+    I/T/L/F/E/Y. Presets use WrapStyle 2 (no wrap), so masking can push a
+    borderline chunk past the margin; still far cheaper than '[REDACTED]',
+    which costs a fixed 10 characters however short the word.
+
+    Leaks the first and last letter, the broadcast convention."""
+    core = text.rstrip(".,!?\"')")
+    tail = text[len(core):]
+    if len(core) <= 2:
+        return "*" * len(core) + tail
+    return core[0] + "*" * (len(core) - 2) + core[-1] + tail
+
+
+def caption_words(
+    edit: ClipEdit,
+    segments: list[dict],
+    remap: TimeRemap,
+    rms_curve,
+    grid_sec: float,
+) -> list[ass_mod.Word]:
+    """The burned-in words for one clip. ORDER IS LOAD-BEARING:
+
+    1. manual text override, BEFORE mark_emphasis — mark_emphasis reads the
+       text for its POWER_WORDS / numeric baseline, so a retyped word must be
+       scored as the word the viewer will actually read;
+    2. censor mask AFTER the override — a censor an override can defeat is not
+       a censor, and the mask must size itself to the displayed text;
+    3. mark_emphasis on source-timed copies, flag stamped back onto the word
+       dict so it rides through the remap BY VALUE (remap_words does
+       {**w, ...}, so extra keys survive). Carrying it by list position instead
+       slides every flag one word left past a deletion;
+    4. blank overrides dropped AFTER mark_emphasis — the threshold is a 0.85
+       quantile over the word set, so filtering first would re-colour unrelated
+       words. Killing one "um" must not restyle the clip;
+    5. remap last, so deletions compose with dead-space cuts in source time.
+    """
+    words_src = [
+        {"word": w["word"], "start": w["start"], "end": w["end"]}
+        for seg in segments
+        for w in seg.get("words", [])
+        if edit.start <= w["start"] < edit.end
+    ]
+
+    for w in words_src:
+        text = edit.caption_overrides.get(str(round(w["start"] * 1000)))
+        if text is not None:
+            # " ".join(split()) collapses newlines: ass.py::_esc rewrites { } \
+            # but NOT \n, and a newline splits the ASS Dialogue line — libass
+            # discards the fragment and silently truncates the caption while
+            # ffmpeg still exits 0.
+            w["word"] = " ".join(text.split())
+
+    if edit.beeps:
+        for w in words_src:
+            mid = (w["start"] + w["end"]) / 2
+            if any(b.start <= mid < b.end for b in edit.beeps):
+                w["word"] = _mask_word(w["word"])
+
+    src_cap = [
+        ass_mod.Word(text=w["word"], start=w["start"] - edit.start, end=w["end"] - edit.start)
+        for w in words_src
+    ]
+    ass_mod.mark_emphasis(src_cap, rms_curve, grid_sec, clip_start=edit.start)
+    for w, flagged in zip(words_src, src_cap):
+        w["emph"] = flagged.emphasized
+
+    words_out = remap.remap_words([w for w in words_src if w["word"]])
+    return [
+        ass_mod.Word(text=w["word"], start=w["start"], end=w["end"], emphasized=w["emph"])
+        for w in words_out
+    ]
+
+
+def beep_spans_out(edit: ClipEdit, remap: TimeRemap) -> list[tuple[float, float]]:
+    """SOURCE beep spans -> OUTPUT spans, padded by one audio frame.
+
+    Deliberately NOT the midpoint-drop rule the event tags use. Dropping a tag
+    whose middle landed in a cut loses a decoration; dropping a beep publishes
+    the audio the user asked to mute. So intersect each beep with every keep
+    range: one straddling a splice survives as two spans, one per side, and one
+    left half-outside a dragged bound is trimmed rather than dropped.
+
+    Padding can make adjacent beeps overlap; the summed between() terms in the
+    filter handle that for free (sum >= 1 inside, not(sum) = 0 there). The
+    0.05 s floor discards slivers too short for ffmpeg's enable= to resolve."""
+    out: list[tuple[float, float]] = []
+    for b in edit.beeps:
+        for ra, rb in remap.ranges:
+            a = max(b.start - BEEP_PAD, ra, edit.start)
+            z = min(b.end + BEEP_PAD, rb, edit.end)
+            if z - a >= 0.05:
+                out.append((remap.to_output(a), remap.to_output(z)))
+    return out
+
+
 def render_clip_edit(job_dir: Path, clip_idx: int, emit) -> dict:
     """The per-clip render path. Returns the updated output entry."""
     ingest = _load_stage(job_dir, "ingest")
@@ -199,30 +327,11 @@ def render_clip_edit(job_dir: Path, clip_idx: int, emit) -> dict:
     if not boxes:
         boxes = [(src_h * 9 // 16 // 2 * 2, src_h - src_h % 2, 0, 0)]
 
-    # --- captions (remapped) ------------------------------------------------
-    words_src = [
-        {"word": w["word"], "start": w["start"], "end": w["end"]}
-        for seg in diarize["segments"]
-        for w in seg.get("words", [])
-        if edit.start <= w["start"] < edit.end
-    ]
-    words_out = remap.remap_words(words_src)
+    # --- captions (override -> censor mask -> emphasis -> remap) ------------
     curves = json.loads(Path(events["curves_path"]).read_text())
-    cap_words = [ass_mod.Word(text=w["word"], start=w["start"], end=w["end"]) for w in words_out]
-    # Emphasis is a SOURCE-time property (per-word RMS in the original
-    # audio): mark it on source-timed copies, then carry each surviving
-    # word's flag across in order.
-    src_cap = [
-        ass_mod.Word(text=w["word"], start=w["start"] - edit.start, end=w["end"] - edit.start)
-        for w in words_src
-    ]
-    ass_mod.mark_emphasis(src_cap, curves["rms"], float(curves["grid_sec"]), clip_start=edit.start)
-    out_idx = 0
-    for w_src, w_flagged in zip(words_src, src_cap):
-        survives = remap.to_output((w_src["start"] + w_src["end"]) / 2) is not None
-        if survives and out_idx < len(cap_words):
-            cap_words[out_idx].emphasized = w_flagged.emphasized
-            out_idx += 1
+    cap_words = caption_words(
+        edit, diarize["segments"], remap, curves["rms"], float(curves["grid_sec"])
+    )
 
     clip_events_out = []
     for e in events["timeline"]:
@@ -238,6 +347,8 @@ def render_clip_edit(job_dir: Path, clip_idx: int, emit) -> dict:
                 "end": remap.to_output_clamped(e["end"]),
             }
         )
+
+    beeps_out = beep_spans_out(edit, remap)
 
     preset = edit.caption_preset or settings.caption_preset
     captions_ok = ffmpeg_bin.supports_captions()
@@ -276,7 +387,47 @@ def render_clip_edit(job_dir: Path, clip_idx: int, emit) -> dict:
             f"[{vlabel}]subtitles=filename={renderer._q(ass_path)}:fontsdir={renderer._q(ass_mod.FONTS_DIR)}[vf]"  # noqa: SLF001
         )
         vlabel = "vf"
-    graph.append(f"[ac]loudnorm=I={settings.lufs_target}:TP={settings.true_peak_db}:LRA=11[af]")
+    if beeps_out:
+        # ONE expression drives BOTH gates, and both gates hang off the SAME
+        # stream via asplit — that is what makes tone and speech mutually
+        # exclusive. A separately generated aevalsrc does not: [ac] carries the
+        # source's 44.1 kHz (1024-sample frames = 23.22 ms) and an s=48000
+        # source quantises at 21.33 ms, which left 22.6 ms of dropout and
+        # 10.6 ms of overlap per clip — and when a beep edge landed on loud
+        # speech the overlap summed to +0.687 dBFS, past full scale.
+        #
+        # ORDER: mute BEFORE loudnorm (censored words must not skew the R128
+        # measurement, and its gate drops the resulting silence for free), tone
+        # mixed in AFTER. Fed upstream instead, the beeps hijack the gated
+        # integrated measurement and loudnorm normalises THE BEEPS to -14 LUFS:
+        # measured speech RMS -34.67 dBFS vs -17.75 in an unbeeped control,
+        # 17 dB of buried dialogue. Splitting across loudnorm is safe — it has
+        # zero delay in dynamic mode (measured 0-sample xcorr lag), so the tone
+        # lands exactly in the hole the mute punched. Do NOT move the gate
+        # downstream of loudnorm: on ffmpeg 8.1.1 `enable` never fires there.
+        spans = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in beeps_out)
+        graph.append("[ac]asplit=2[sp][tn]")
+        graph.append(f"[sp]volume=0:enable='{spans}'[acb]")
+        graph.append(
+            f"[acb]loudnorm=I={settings.lufs_target}:TP={settings.true_peak_db}:LRA=11[anorm]"
+        )
+        # aeval (not aevalsrc, not sine): it ignores the input samples and
+        # synthesises from t, inheriting the split's rate, framing AND channel
+        # layout. c=same keeps a mono source mono and a stereo source stereo —
+        # a mono generator makes amix negotiate the whole mix down to 1 channel,
+        # and aevalsrc=EXPR|EXPR fixes that only by upmixing mono and paying
+        # libswresample's 3.01 dB rematrix. `sine` has no channel_layout and no
+        # amplitude option, so its level is build-dependent. Neither aeval nor
+        # aevalsrc is an -i, so _overlay_filters keeps input_offset=1.
+        graph.append(
+            f"[tn]aeval={BEEP_AMPLITUDE}*sin(2*PI*{BEEP_HZ}*t):c=same,"
+            f"volume=0:enable='not({spans})'[tone]"
+        )
+        # normalize=0 or amix halves BOTH inputs and the speech ducks 6 dB for
+        # the whole clip. duration=first ends the mix on the speech.
+        graph.append("[anorm][tone]amix=inputs=2:normalize=0:duration=first[af]")
+    else:
+        graph.append(f"[ac]loudnorm=I={settings.lufs_target}:TP={settings.true_peak_db}:LRA=11[af]")
 
     if renderer.videotoolbox_available():
         vcodec = ["-c:v", "h264_videotoolbox", "-b:v", renderer.VT_BITRATE, "-allow_sw", "1"]

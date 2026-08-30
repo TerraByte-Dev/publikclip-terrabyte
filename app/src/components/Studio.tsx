@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { confirm } from '@tauri-apps/plugin-dialog'
 import type { JobSummary } from '../types'
 import KeyModal from './KeyModal'
 
@@ -28,13 +29,27 @@ interface Props {
   onOpenLoop: () => void
   onOpenJob: (id: string) => void
   onResume: (id: string, llm?: string) => void
+  onDelete: (id: string) => void
 }
 
-export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop, onOpenJob, onResume }: Props) {
+export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop, onOpenJob, onResume, onDelete }: Props) {
   const [source, setSource] = useState('')
   const [llm, setLlm] = useState('gemini')
   const [captions, setCaptions] = useState('classic')
   const [showKey, setShowKey] = useState(false)
+
+  async function askDelete(job: JobSummary) {
+    const label = job.title ?? job.id
+    // Native confirm, not an in-app modal: one array entry in
+    // capabilities/default.json plus one import, versus ~30 lines of TSX and
+    // scrim CSS for a primitive used once. .catch(() => false) so a future ACL
+    // change fails visibly-inert rather than as a swallowed rejection.
+    const ok = await confirm(
+      `Delete "${label}"?\n\nThe whole job folder goes \u2014 transcript, scores, rendered clips. This cannot be undone.`,
+      { title: 'publikclip', kind: 'warning', okLabel: 'Delete', cancelLabel: 'Keep' }
+    ).catch(() => false)
+    if (ok) onDelete(job.id)
+  }
 
   return (
     <div className="studio">
@@ -49,17 +64,39 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
           <p className="rail-label">SESSIONS</p>
           {jobs.length === 0 && <p className="rail-empty">nothing yet</p>}
           {jobs.map((job) => (
-            <button
+            <div
               key={job.id}
-              className={`rail-job ${job.rendered ? '' : 'partial'}`}
-              onClick={() => (job.rendered ? onOpenJob(job.id) : onResume(job.id))}
-              disabled={running}
-              title={job.rendered ? 'open results' : 'resume from checkpoint'}
+              className="rail-job-wrap"
+              onContextMenu={(e) => {
+                e.preventDefault()
+                if (!running) askDelete(job)
+              }}
             >
-              <span className={`led ${job.rendered ? 'led-on' : 'led-half'}`} />
-              <span className="rail-job-title">{job.title ?? job.id}</span>
-              <span className="rail-job-hint">{job.rendered ? 'open' : 'resume'}</span>
-            </button>
+              {/* the ✕ is a SIBLING of .rail-job, never a child: a <button>
+                  inside a <button> is invalid DOM and React logs it. disabled
+                  matches the row — deleting a job dir while the sidecar writes
+                  checkpoints into it corrupts the run, and on Windows fails
+                  with a sharing violation. */}
+              <button
+                className={`rail-job ${job.rendered ? '' : 'partial'}`}
+                onClick={() => (job.rendered ? onOpenJob(job.id) : onResume(job.id))}
+                disabled={running}
+                title={job.rendered ? 'open results' : 'resume from checkpoint'}
+              >
+                <span className={`led ${job.rendered ? 'led-on' : 'led-half'}`} />
+                <span className="rail-job-title">{job.title ?? job.id}</span>
+                <span className="rail-job-hint">{job.rendered ? 'open' : 'resume'}</span>
+              </button>
+              <button
+                className="rail-job-del"
+                onClick={() => askDelete(job)}
+                disabled={running}
+                title="delete this session"
+                aria-label={`delete ${job.title ?? job.id}`}
+              >
+                ✕
+              </button>
+            </div>
           ))}
         </div>
         <footer className="rail-foot">
