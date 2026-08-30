@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { api } from '../api'
 import type { Clip, JobResults, RenderOutput } from '../types'
 import ClipEditor from './ClipEditor'
@@ -44,9 +44,89 @@ function fmtTime(t: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+/* ---------- loudness ----------
+ * EBU R128 of the DELIVERED mp4, measured by the pipeline - not loudnorm's
+ * prediction, whose output_tp reports "-1.00" for both files that actually
+ * measure +0.1 dBTP on disk.
+ *
+ * The verdict band is +/-2 LU around the run's target, deliberately wide.
+ * R128's delivery tolerance is +/-0.5 LU, which nothing here holds, and ~1 LU
+ * is the just-noticeable level step on speech - so +/-2 LU is the honest line
+ * for "the next clip will not jump at you", which is the actual complaint.
+ * Measured over all 38 clips on disk: 26 in band, 11 QUIET, exactly 1 TOO LOUD.
+ *
+ * Clipping flags at >= 0 dBFS, NOT at the -1.0 dBTP ceiling the renderer asks
+ * for: 28 of those 38 sit above -1.0, because the AAC encode adds up to ~1 dB
+ * of inter-sample overshoot AFTER loudnorm has already hit its ceiling. A
+ * ceiling-strict flag would be red on three quarters of the library forever.
+ * At >= 0 it fires on the 2 files genuinely past full scale - and two-pass
+ * clears both, so the badge goes away when the problem does.
+ */
+const LUFS_TOL = 2.0
+// config.py Settings.lufs_target - for jobs rendered before the target was recorded.
+const LUFS_TARGET_FALLBACK = -14.0
+
+type Verdict = 'hot' | 'ok' | 'quiet'
+
+interface LoudRead {
+  verdict: Verdict
+  lufs: number
+  tp: number | null
+  clipping: boolean
+  note: string
+  peakNote: string | null
+}
+
+const VERDICT_LABEL: Record<Verdict, string> = {
+  hot: 'TOO LOUD',
+  ok: 'ON TARGET',
+  quiet: 'QUIET'
+}
+const VERDICT_LED: Record<Verdict, string> = {
+  hot: 'led-err',
+  ok: 'led-on',
+  quiet: 'led-half'
+}
+
+// Round BEFORE taking the sign, or -0.04 renders as "-0.0 dBTP".
+function fmtTp(v: number | null | undefined): string {
+  if (v == null) return '\u2014'
+  const r = Math.round(v * 10) / 10
+  return `${r >= 0 ? '+' : ''}${r.toFixed(1)} dBTP`
+}
+
+function readLoudness(out: RenderOutput, target: number): LoudRead | null {
+  // `!=` not `!==`: the key is ABSENT (undefined) on every clip rendered before
+  // this shipped, and null when the measurement failed. One comparison, both.
+  if (out.lufs == null) return null
+  const tp = out.true_peak ?? null
+  const delta = out.lufs - target
+  const verdict: Verdict = delta > LUFS_TOL ? 'hot' : delta < -LUFS_TOL ? 'quiet' : 'ok'
+  const clipping = tp != null && tp >= 0
+  const note =
+    verdict === 'hot'
+      ? `${delta.toFixed(1)} LU hotter than the batch. Instagram and TikTok normalise playback to about -14 LUFS, so on-platform they just turn this down and it loses dynamic range for nothing. A direct send, a downloaded file or an embed on your own site does NOT turn it down \u2014 that is the one that blasts people. Fix it in \u270e EDIT CLIP, then RE-RENDER CLIP.`
+      : verdict === 'quiet'
+        ? `${Math.abs(delta).toFixed(1)} LU under target. Platforms turn it up and lift the room tone with it \u2014 thin next to the rest of the batch, but nobody gets hurt.`
+        : clipping
+          ? 'Level with the rest of the batch \u2014 but the peak below still needs a look.'
+          : 'Level with the rest of the batch. Nothing to do.'
+  const peakNote = clipping
+    ? `True peak ${fmtTp(tp)} \u2014 at or past full scale. This file clips on its own, before any platform touches it. Re-render it: \u270e EDIT CLIP, then RE-RENDER CLIP.`
+    : null
+  return { verdict, lufs: out.lufs, tp, clipping, note, peakNote }
+}
+
 export default function Review({ results, onBack, onRestyle }: Props) {
-  const outputs = results.render?.outputs ?? []
+  // render_clip.py rewrites this clip's entry in render.json on every
+  // per-clip re-render, but `results` is a prop and App only fetches
+  // job_results on run completion and openJob. Without this the LOUDNESS badge
+  // keeps reporting the PRE-edit reading - a lie about the one number the user
+  // went in to change.
+  const [freshOutputs, setFreshOutputs] = useState<RenderOutput[] | null>(null)
+  const outputs = freshOutputs ?? results.render?.outputs ?? []
   const clips = results.score?.clips ?? []
+  const lufsTarget = results.render?.lufs_target ?? LUFS_TARGET_FALLBACK
   const [selected, setSelected] = useState(0)
   const [exported, setExported] = useState<Record<number, string>>({})
   const currentPreset = results.render?.caption_preset ?? 'classic'
@@ -59,8 +139,18 @@ export default function Review({ results, onBack, onRestyle }: Props) {
   const pair = useMemo(() => {
     const out = outputs[selected]
     const clip = out ? clips[out.clip] : undefined
-    return { out, clip }
-  }, [outputs, clips, selected])
+    return { out, clip, loud: out ? readLoudness(out, lufsTarget) : null }
+  }, [outputs, clips, selected, lufsTarget])
+
+  // Safe to read straight after the result event: cli.py returns from
+  // render_clip_edit - which has already tmp.replace'd render.json - BEFORE it
+  // prints the result line, so there is no read/write race.
+  const refresh = useCallback(() => {
+    api
+      .jobResults(results.job_id)
+      .then((r) => setFreshOutputs(r.render?.outputs ?? null))
+      .catch(() => {})
+  }, [results.job_id])
 
   async function doExport(out: RenderOutput, clip: Clip) {
     const dest = await api.exportClip(
@@ -79,7 +169,10 @@ export default function Review({ results, onBack, onRestyle }: Props) {
           jobId={results.job_id}
           clipIndex={editing}
           onClose={() => setEditing(null)}
-          onRendered={() => setReloadKey((k) => k + 1)}
+          onRendered={() => {
+            setReloadKey((k) => k + 1)
+            refresh()
+          }}
         />
       </div>
     )
@@ -139,6 +232,12 @@ export default function Review({ results, onBack, onRestyle }: Props) {
       <div className="filmstrip">
         {outputs.map((out, i) => {
           const clip = clips[out.clip]
+          // Only the ear blast gets a corner flag. QUIET is 11 of the 38 clips
+          // on disk and is not what was asked about. True peak is NOT here
+          // either: it fires on 28 of 38 at the -1.0 ceiling and would never
+          // clear, because that overshoot is the AAC encoder, not loudnorm.
+          const loud = readLoudness(out, lufsTarget)
+          const hot = loud?.verdict === 'hot'
           return (
             <button
               key={out.clip}
@@ -149,6 +248,14 @@ export default function Review({ results, onBack, onRestyle }: Props) {
               <span className="film-score mono">{Math.round(clip?.score ?? out.score)}</span>
               <span className="film-time mono">{clip ? fmtTime(clip.start) : ''}</span>
               <span className="film-platform">{out.best_platform}</span>
+              {hot && loud && (
+                <span
+                  className="film-loud"
+                  title={`${loud.lufs.toFixed(1)} LUFS \u00b7 target ${lufsTarget.toFixed(1)}`}
+                >
+                  HOT
+                </span>
+              )}
             </button>
           )
         })}
@@ -260,6 +367,35 @@ export default function Review({ results, onBack, onRestyle }: Props) {
                   </p>
                 </div>
               </>
+            )}
+
+            <p className="audit-label">LOUDNESS</p>
+            {pair.loud ? (
+              <div
+                className={`loud-card loud-${pair.loud.verdict}${
+                  pair.loud.clipping ? ' loud-clipping' : ''
+                }`}
+              >
+                <p className="loud-head">
+                  <span
+                    className={`led ${
+                      pair.loud.clipping ? 'led-err' : VERDICT_LED[pair.loud.verdict]
+                    }`}
+                  />
+                  <span className="loud-verdict">{VERDICT_LABEL[pair.loud.verdict]}</span>
+                  {pair.loud.clipping && <span className="loud-peak">\u26a0 CLIPPING</span>}
+                </p>
+                <p className="loud-nums mono">
+                  {pair.loud.lufs.toFixed(1)} LUFS \u00b7 peak {fmtTp(pair.loud.tp)} \u00b7 target{' '}
+                  {lufsTarget.toFixed(1)} LUFS
+                </p>
+                <p className="loud-note">{pair.loud.note}</p>
+                {pair.loud.peakNote && <p className="loud-note">{pair.loud.peakNote}</p>}
+              </div>
+            ) : (
+              <p className="loud-none mono">
+                not measured \u2014 rendered before publikclip started reading levels
+              </p>
             )}
 
             <p className="audit-fine mono">

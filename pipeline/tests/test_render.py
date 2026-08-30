@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from publikclip_pipeline.captions import ass as ass_mod
-from publikclip_pipeline.render import ffmpeg_bin, renderer
+from publikclip_pipeline.render import ffmpeg_bin, loudness, renderer
 
 
 def test_crop_boxes_even_and_bounded():
@@ -111,3 +111,133 @@ def test_render_smoke(tmp_path):
     check = renderer.verify_output(out, 20.0)
     assert check["ok"], check
     assert check["width"] == 1080 and check["height"] == 1920
+
+
+# ---------------------------------------------------------------- loudness --
+
+LOUDNORM_JSON = """{
+	"input_i" : "-24.19",
+	"input_tp" : "-10.09",
+	"input_lra" : "15.00",
+	"input_thresh" : "-35.50",
+	"output_i" : "-14.00",
+	"output_tp" : "-1.00",
+	"normalization_type" : "dynamic",
+	"target_offset" : "1.00"
+}"""
+
+# One REAL ebur128 progress line (values swapped to -99.9) plus the verbatim
+# Summary block. 417 such lines precede the Summary on a 47 s clip and every one
+# carries its own I:, LRA: and dBFS columns - which is why both reads have to be
+# anchored inside the Summary and not just "the last dBFS in the stream".
+R128_SUMMARY = """[Parsed_ebur128_0 @ 0000] t: 46.628979  TARGET:-23 LUFS    M:  -9.2 S: -11.8     I: -99.9 LUFS       LRA:  99.9 LU  FTPK: -99.9 -99.9 dBFS  TPK: -99.9 -99.9 dBFS
+[Parsed_ebur128_0 @ 0000] Summary:
+
+  Integrated loudness:
+    I:         -11.3 LUFS
+    Threshold: -21.9 LUFS
+
+  Loudness range:
+    LRA:         9.7 LU
+    Threshold: -31.9 LUFS
+    LRA low:   -18.0 LUFS
+    LRA high:   -8.3 LUFS
+
+  True peak:
+    Peak:       -0.5 dBFS
+"""
+
+
+def test_loudnorm_json_survives_surrounding_stderr():
+    """A parse miss is silent and reads exactly like a working fallback."""
+    heads = ("", "Stream #0:1\n", "[fc#0] cfg { in\n")
+    tails = ("", "\n[out#0] } stray\n", '\n{"a": 1}\n', "\ntrailing { never closed\n")
+    for head in heads:
+        for tail in tails:
+            got = loudness.parse_measurement(head + LOUDNORM_JSON + tail)
+            assert got is not None and got["input_i"] == -24.19, (head, tail)
+    for junk in ("", "Error opening output file -.\n", LOUDNORM_JSON[:40]):
+        assert loudness.parse_measurement(junk) is None
+
+
+def test_unmeasurable_clip_falls_back_to_one_pass():
+    """A silent clip analyses as -inf/inf and loudnorm REJECTS that on pass 2:
+    'Value -inf for parameter measured_I out of range [-99 - 0]', no frames
+    written - which stage.py turns into a StageError that kills the whole run.
+    float('-inf') does NOT raise, so this must be a finite/range check."""
+    silent = LOUDNORM_JSON.replace('"-24.19"', '"-inf"').replace('"1.00"', '"inf"')
+    assert loudness.parse_measurement(silent) is None
+    assert loudness.parse_measurement(LOUDNORM_JSON.replace('"-24.19"', '"nan"')) is None
+    assert loudness.parse_measurement(LOUDNORM_JSON.replace('"-24.19"', '"-120.0"')) is None
+    assert "measured_I" not in loudness.filter_str(-14.0, -1.0, None)
+    # offset is load-bearing: without it, pass 2 is byte-identical to pass 1.
+    assert ":offset=" in loudness.filter_str(
+        -14.0, -1.0, loudness.parse_measurement(LOUDNORM_JSON)
+    )
+
+
+def test_measure_forces_info_verbosity_and_falls_back(monkeypatch):
+    """The failure that WILL happen if the argv is copied from a render:
+    print_format=json logs at AV_LOG_INFO and both render commands carry
+    '-v error', at which level ffmpeg emits ZERO bytes of stderr. `-v` is
+    last-wins, so the override has to sit AFTER the caller's args."""
+    seen = {}
+
+    def fake(argv, timeout):
+        seen["argv"] = argv
+        return 0, LOUDNORM_JSON
+
+    monkeypatch.setattr(loudness, "_run", fake)
+    got = loudness.measure(
+        "ffmpeg", ["-v", "error", "-i", "x.mp4", "-vn"],
+        ["-af", loudness.analysis_filter(-14.0, -1.0)],
+    )
+    assert got is not None and got["input_i"] == -24.19
+    # the caller's own "-v error" is still in there, earlier; -v is last-wins
+    assert "error" in seen["argv"]
+    assert seen["argv"][-5:] == ["-v", "info", "-f", "null", "-"]
+
+    monkeypatch.setattr(loudness, "_run", lambda argv, timeout: (1, LOUDNORM_JSON))
+    assert loudness.measure("ffmpeg", ["-i", "x"], ["-af", "anull"]) is None
+
+
+def test_r128_parses_past_the_progress_spam():
+    assert renderer._parse_r128(R128_SUMMARY) == {"lufs": -11.3, "true_peak": -0.5}
+
+
+def test_r128_silence_is_null_never_infinity():
+    """A silent clip prints 'Peak: -inf dBFS'. float('-inf') json.dumps to the
+    literal `-Infinity`, which serde_json rejects - job_results then hands the
+    UI a null render stage and the review bay shows ZERO clips. A plain
+    dumps/loads round-trip PASSES on -inf (Python's decoder accepts -Infinity
+    back); allow_nan=False is the assertion that bites."""
+    silent = R128_SUMMARY.replace("-0.5 dBFS", "-inf dBFS").replace("-11.3 LUFS", "-70.0 LUFS")
+    out = renderer._parse_r128(silent)
+    assert out == {"lufs": -70.0, "true_peak": None}
+    json.dumps(out, allow_nan=False)
+
+
+def test_r128_without_a_summary_is_all_null():
+    assert renderer._parse_r128("ffmpeg said nothing useful") == {
+        "lufs": None, "true_peak": None
+    }
+
+
+def test_measure_loudness_real_file_and_failures(tmp_path):
+    """Whole path, real ffmpeg. 0.20-amplitude 1 kHz stereo - the censor beep's
+    own level - measures -14.0 LUFS / -14.0 dBTP. WAV not AAC: the same sine
+    reads ~-13.1 dBTP after aac 192k, and this tests the helper, not the codec."""
+    tone = tmp_path / "tone.wav"
+    subprocess.run(
+        [ffmpeg_bin.ffmpeg(), "-v", "error", "-y", "-f", "lavfi",
+         "-i", "aevalsrc=0.20*sin(2*PI*1000*t):s=48000:d=6:c=stereo",
+         "-c:a", "pcm_s16le", str(tone)],
+        check=True, timeout=120,
+    )
+    out = renderer.measure_loudness(tone)
+    assert out["lufs"] == pytest.approx(-14.0, abs=0.3)
+    assert out["true_peak"] == pytest.approx(-14.0, abs=0.3)
+    # Never raises - a metering failure is a blank number, not a failed render.
+    assert renderer.measure_loudness(tmp_path / "nope.mp4") == {
+        "lufs": None, "true_peak": None
+    }
