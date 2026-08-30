@@ -3,10 +3,12 @@
 // event to the frontend, and exposes small filesystem/settings commands.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::collections::VecDeque;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
 
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
@@ -138,11 +140,19 @@ fn resume_job(
     Ok(())
 }
 
+/// How many trailing stderr lines ride along on an `exited` event. A Python
+/// traceback's last few lines carry the exception and its message; the frames
+/// above them are noise in a UI.
+const STDERR_TAIL_LINES: usize = 12;
+
 fn stream_pipeline(app: &AppHandle, program: &str, args: &[String]) {
     let child = quiet_command(program)
         .args(args)
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        // Piped, not null: when the sidecar dies without a result line this is
+        // the only thing that knows why, and discarding it left the UI with
+        // nothing to say but "the pipeline exited unexpectedly".
+        .stderr(Stdio::piped())
         .spawn();
     let mut child = match child {
         Ok(c) => c,
@@ -154,6 +164,21 @@ fn stream_pipeline(app: &AppHandle, program: &str, args: &[String]) {
             return;
         }
     };
+    // Drained on its own thread, and bounded — a chatty stderr must never fill
+    // the pipe and deadlock the child mid-run, nor grow without limit.
+    let tail = Arc::new(Mutex::new(VecDeque::<String>::new()));
+    let drain = child.stderr.take().map(|stderr| {
+        let tail = Arc::clone(&tail);
+        std::thread::spawn(move || {
+            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                let mut buf = tail.lock().unwrap();
+                if buf.len() == STDERR_TAIL_LINES {
+                    buf.pop_front();
+                }
+                buf.push_back(line);
+            }
+        })
+    });
     if let Some(stdout) = child.stdout.take() {
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
             if let Ok(value) = serde_json::from_str::<Value>(&line) {
@@ -161,9 +186,20 @@ fn stream_pipeline(app: &AppHandle, program: &str, args: &[String]) {
             }
         }
     }
-    if let Ok(status) = child.wait() {
+    let status = child.wait();
+    if let Some(handle) = drain {
+        let _ = handle.join();
+    }
+    if let Ok(status) = status {
         if !status.success() {
-            let _ = app.emit("pipeline-event", json!({"event": "exited", "code": status.code()}));
+            let detail = tail
+                .lock()
+                .map(|buf| buf.iter().cloned().collect::<Vec<_>>().join("\n"))
+                .unwrap_or_default();
+            let _ = app.emit(
+                "pipeline-event",
+                json!({"event": "exited", "code": status.code(), "stderr": detail}),
+            );
         }
     }
 }

@@ -77,7 +77,16 @@ export default function App() {
         }
       } else if (payload.event === 'exited') {
         setRunning(false)
-        setRunError('The pipeline exited unexpectedly. Resume the job to continue from its last checkpoint.')
+        refreshJobs()
+        // The sidecar died without a result line. Its last stderr is the only
+        // account of why — without it this said "exited unexpectedly" and sent
+        // people to Resume, which then fails in exactly the same place.
+        const detail = String(payload.stderr ?? '').trim()
+        setRunError(
+          detail
+            ? `The pipeline stopped during processing:\n\n${detail}`
+            : 'The pipeline exited unexpectedly. Resume the job to continue from its last checkpoint.'
+        )
       }
     }).then((un) => {
       if (disposed) un()
