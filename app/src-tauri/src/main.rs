@@ -314,7 +314,7 @@ async fn check_ollama() -> Result<Value, String> {
 /// suggestions). Long-running render-clip goes through run_edit_render
 /// instead so progress streams.
 #[tauri::command]
-async fn edit_tool(args: Vec<String>) -> Result<Value, String> {
+async fn edit_tool(app: AppHandle, args: Vec<String>) -> Result<Value, String> {
     let (program, base_args) = pipeline_invocation();
     let mut full = base_args;
     full.push("edit".to_string());
@@ -327,7 +327,24 @@ async fn edit_tool(args: Vec<String>) -> Result<Value, String> {
     // last JSON line is the payload (progress lines may precede it)
     let line = stdout.lines().rev().find(|l| l.trim_start().starts_with('{'));
     match line.and_then(|l| serde_json::from_str::<Value>(l).ok()) {
-        Some(v) => Ok(v),
+        Some(v) => {
+            // The source video lives wherever the user keeps it - Downloads,
+            // Desktop, an SD card - and essentially never under the
+            // assetProtocol scope ($HOME/.publikclip/**), because ingesting a
+            // local file leaves media_path at the original location. The asset
+            // protocol then answers every ClipEditor <video> request with 403:
+            // loadedmetadata never fires, videoWidth stays 0, and the whole
+            // crop/monitor rAF block never runs - so the editor looks broken
+            // while its timeline, which comes over IPC, draws fine.
+            //
+            // A wider glob cannot fix this: a card ingest is off $HOME
+            // entirely. Grant exactly the one file the editor is opening.
+            // suggest-visuals returns no media_path, so the `if let` skips it.
+            if let Some(media) = v.get("media_path").and_then(Value::as_str) {
+                let _ = app.asset_protocol_scope().allow_file(media);
+            }
+            Ok(v)
+        }
         None => Err(format!(
             "edit tool produced no JSON: {}",
             String::from_utf8_lossy(&out.stderr).chars().take(400).collect::<String>()
