@@ -6,7 +6,8 @@ caching keyed on (backend, model, prompt, schema) so re-runs never re-spend
 
 Key resolution: PUBLIKCLIP_GEMINI_API_KEY env var, then
 PUBLIKCLIP_HOME/secrets.json {"gemini_api_key": "..."} (written by the
-app's onboarding). Ollama needs no key — just a running daemon.
+app's onboarding). Ollama needs no key — just a running daemon, and PUBLIKCLIP_OLLAMA_MODEL
+to override which of its models judges.
 """
 
 from __future__ import annotations
@@ -28,6 +29,15 @@ GEMINI_MODEL = "gemini-flash-latest"
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 OLLAMA_URL = "http://localhost:11434"
 LLM_TIMEOUT = 120.0
+OLLAMA_TIMEOUT = 600.0
+
+# Ollama sizes the KV cache from the model's FULL trained context unless told
+# otherwise, and a 131k-context 8B model then wants ~14 GB of KV — which pushes
+# most of the model back onto the CPU and drops generation to ~0.05 tok/s, i.e.
+# a hang. Every prompt here is one clip's transcript: T1 measured 276 tokens,
+# the music brief a little more. 8k is ~20x headroom and keeps the whole model
+# resident on any GPU that could hold it in the first place.
+OLLAMA_NUM_CTX = 8192
 
 
 class LlmError(Exception):
@@ -112,9 +122,12 @@ class GeminiClient:
         last_err: Exception | None = None
         for attempt in range(3):
             try:
+                # Header, never ?key= — httpx puts the request URL verbatim in
+                # every HTTPStatusError message, so a query-param key ends up
+                # in tracebacks, logs, and the jobs.error column on any 4xx/5xx.
                 res = httpx.post(
                     GEMINI_URL.format(model=self.model),
-                    params={"key": self._key},
+                    headers={"x-goog-api-key": self._key},
                     json=body,
                     timeout=LLM_TIMEOUT,
                 )
@@ -145,6 +158,13 @@ class GeminiClient:
                 raise
             except (httpx.HTTPError, KeyError, json.JSONDecodeError, IndexError) as err:
                 last_err = err
+                # 500/503 is Flash being overloaded and it clears in seconds —
+                # three retries fired back-to-back all hit the same bad moment
+                # and burn the whole run's scoring stage.
+                if attempt < 2:
+                    import time
+
+                    time.sleep(4 * (attempt + 1))
         raise LlmError(f"Gemini call failed after retries: {last_err}")
 
 
@@ -162,7 +182,11 @@ class OllamaClient:
         models = [m["name"] for m in res.json().get("models", [])]
         if not models:
             raise LlmError("Ollama has no models. Pull one, e.g. `ollama pull llama3.1:8b`.")
-        self.model = model if model in models else _pick_ollama_model(models)
+        if model and model not in models:
+            raise LlmError(
+                f"Ollama has no model {model!r}. Installed: {', '.join(sorted(models))}"
+            )
+        self.model = model or _pick_ollama_model(models)
 
     def generate_json(
         self, prompt: str, schema: dict, images: list[bytes] | None = None
@@ -178,12 +202,20 @@ class OllamaClient:
             "messages": [{"role": "user", "content": prompt}],
             "format": schema,
             "stream": False,
-            "options": {"temperature": 0.1},
+            "options": {"temperature": 0.1, "num_ctx": OLLAMA_NUM_CTX},
         }
         try:
-            res = httpx.post(f"{OLLAMA_URL}/api/chat", json=body, timeout=600.0)
+            res = httpx.post(f"{OLLAMA_URL}/api/chat", json=body, timeout=OLLAMA_TIMEOUT)
             res.raise_for_status()
             data = json.loads(_strip_fences(res.json()["message"]["content"]))
+        except httpx.TimeoutException as err:
+            # A model that fits in VRAM answers this prompt in seconds. Minutes
+            # means llama.cpp spilled to CPU/host memory and is paging per token.
+            raise LlmError(
+                f"Ollama ({self.model}) produced nothing in {OLLAMA_TIMEOUT:.0f}s — it is almost "
+                "certainly spilling out of VRAM. Free the GPU, or set PUBLIKCLIP_OLLAMA_MODEL "
+                "to a smaller model, or switch to Gemini mode."
+            ) from err
         except (httpx.HTTPError, KeyError, json.JSONDecodeError) as err:
             raise LlmError(f"Ollama call failed: {err}") from err
         cache_file.write_text(json.dumps(data))
@@ -212,5 +244,7 @@ def _pick_ollama_model(models: list[str]) -> str:
 
 def make_client(llm_mode: str):
     if llm_mode == "ollama":
-        return OllamaClient()
+        # PUBLIKCLIP_OLLAMA_MODEL overrides the picker, which has no way to
+        # know a 7b *coder* model is the wrong judge of whether a joke lands.
+        return OllamaClient(os.environ.get("PUBLIKCLIP_OLLAMA_MODEL"))
     return GeminiClient()

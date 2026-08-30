@@ -137,7 +137,7 @@ def fetch_gemini(query: str, job_dir: Path) -> str | None:
     try:
         res = httpx.post(
             llm_mod.GEMINI_URL.format(model=GEMINI_IMAGE_MODEL),
-            params={"key": key},
+            headers={"x-goog-api-key": key},  # not ?key= — see scoring/llm.py
             json={
                 "contents": [{"parts": [{"text": f"A clean, punchy illustrative photo for a video overlay: {query}. No text in the image."}]}],
                 "generationConfig": {"responseModalities": ["IMAGE"]},
