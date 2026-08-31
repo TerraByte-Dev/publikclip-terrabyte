@@ -12,7 +12,7 @@ import json
 import sys
 import traceback
 
-from . import config
+from . import config, presets
 from .jobs import queue
 
 
@@ -72,8 +72,17 @@ def cmd_run(args: argparse.Namespace) -> int:
         settings.llm_mode = args.llm
     if args.captions:
         settings.caption_preset = args.captions
+    if args.preset:
+        settings.content_preset = args.preset
     if args.camera:
         settings.camera.speaker_change = args.camera
+    elif args.preset:
+        # A preset SEEDS the camera only when the user did not choose one, and
+        # only at creation. After this the per-job snapshot is the single owner
+        # — a preset that kept overriding --camera would give one value two.
+        default_cam = presets.get(settings.content_preset)["camera_default"]
+        if default_cam:
+            settings.camera.speaker_change = default_cam
     job = queue.create_job(source_type, source, json.dumps(settings.to_json()))
     return _execute(job, args.jsonl)
 
@@ -83,17 +92,25 @@ def cmd_resume(args: argparse.Namespace) -> int:
     if job is None:
         print(f"No job {args.job_id}", file=sys.stderr)
         return 2
-    if args.llm or args.captions or args.camera:
+    # `or args.preset` is load-bearing: without it `resume --preset gameplay`
+    # alone is silently ignored.
+    if args.llm or args.captions or args.camera or args.preset:
         settings = config.Settings.from_json(json.loads(job.settings_json))
         if args.llm:
             settings.llm_mode = args.llm
         if args.captions:
             settings.caption_preset = args.captions
+        if args.preset:
+            settings.content_preset = args.preset
         if args.camera:
             settings.camera.speaker_change = args.camera
         new_json = json.dumps(settings.to_json())
         with queue._connect() as conn:  # noqa: SLF001 — CLI is a queue friend
             conn.execute("UPDATE jobs SET settings_json = ? WHERE id = ?", (new_json, job.id))
+        # The dir snapshot is what edits/render_clip.py reads for per-clip
+        # re-renders. Leaving it at creation-time values makes the ClipEditor
+        # silently use the OLD preset after any resume override.
+        (job.dir / "settings.json").write_text(new_json)
         job = queue.get_job(args.job_id)
     return _execute(job, args.jsonl)
 
@@ -324,6 +341,8 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--llm", choices=["gemini", "ollama"], default=None)
     p_run.add_argument("--captions", default=None, help="caption preset name")
     p_run.add_argument("--camera", choices=["cut", "pan", "locked"], default=None)
+    p_run.add_argument("--preset", choices=["talking", "gameplay"], default=None,
+                       help="judgement profile for this source (see presets.py)")
     p_run.set_defaults(fn=cmd_run)
 
     p_resume = sub.add_parser("resume", help="resume a job from its checkpoints")
@@ -331,6 +350,8 @@ def main(argv: list[str] | None = None) -> int:
     p_resume.add_argument("--llm", choices=["gemini", "ollama"], default=None)
     p_resume.add_argument("--captions", default=None, help="caption preset name")
     p_resume.add_argument("--camera", choices=["cut", "pan", "locked"], default=None)
+    p_resume.add_argument("--preset", choices=["talking", "gameplay"], default=None,
+                          help="judgement profile for this source (see presets.py)")
     p_resume.set_defaults(fn=cmd_resume)
 
     p_jobs = sub.add_parser("jobs", help="list jobs")

@@ -63,24 +63,65 @@ T2_SCHEMA: dict[str, Any] = {
 }
 
 
-def t1_prompt(transcript_text: str, context: dict) -> str:
+GAMEPLAY_T1_GUIDANCE = (
+    "This clip is cut from GAMEPLAY footage. The transcript is incidental — "
+    "the player may say almost nothing, and silence is normal, not a defect. "
+    "Judge the moment from the audio events listed above and from what the "
+    "speech implies happened.\n"
+    "Read the five dimensions this way for gameplay:\n"
+    "  hook            — would the first ~3 seconds stop a scrolling stranger "
+    "who does not play this game?\n"
+    "  funniness       — how hard the moment LANDS: a clean multikill, an "
+    "absurd failure, a lucky escape. A spectacular fail counts as much as a "
+    "spectacular success.\n"
+    "  shock           — outcome surprise: did it end differently than the "
+    "setup implied (reversal, whiff, comeback)?\n"
+    "  curiosity_gap   — does the setup make a viewer stay to see how it "
+    "resolves?\n"
+    "  value           — legibility and rewatch: can someone who has NEVER "
+    "played this game tell what just happened? Three kills in a row is "
+    "legible; a well-timed cooldown is not.\n"
+    "Set punchline_index to -1 and hook_type to 'none' unless the speech "
+    "genuinely carries them. Most gameplay is unremarkable; 8+ should be rare."
+)
+
+
+def t1_prompt(transcript_text: str, context: dict, profile: str = "talking") -> str:
     """The candidate's transcript plus the local evidence the LLM is allowed
     to see (events summary) — but the LLM never sees the heatmap or arousal
     numbers it will later be checked against. Judge and evidence stay
-    independent; that's what makes the cross-validation meaningful."""
+    independent; that's what makes the cross-validation meaningful.
+
+    `profile` selects PROMPT TEXT only. Every profile returns T1_SCHEMA, so
+    cross_validate() and the Instagram auto-fit keep working unchanged — see
+    CV_KEYS below."""
     events_desc = context.get("events_desc", "none detected")
-    return (
+    head = (
         "You are rating a candidate short-form clip cut from a longer video. "
         "Rate ONLY what is in this transcript — do not assume missing context makes it better.\n\n"
         f"Speakers and transcript ({context.get('duration', 0):.0f} seconds):\n"
         f"{transcript_text}\n\n"
         f"Audio events detected in this span: {events_desc}\n\n"
+    )
+    if profile == "gameplay":
+        return head + GAMEPLAY_T1_GUIDANCE
+    return head + (
         "Score each dimension honestly. Most clips are mediocre; 8+ on any "
         "dimension should be rare. hook rates ONLY the first ~3 seconds. "
         "shock is about content (surprising/taboo), independent of hook. "
         "punchline_index is the 0-based index (counting every word in order) "
         "of the word where the biggest laugh lands, or -1."
     )
+
+
+# The five dimensions cross_validate() indexes by name. Every preset's T1
+# prompt must produce exactly these — insights/calibration.py replays stored
+# clips through cross_validate(), and a foreign key set raises KeyError inside
+# fit_constants(), which sync() swallows and the UI never renders. One linked
+# gaming clip would silently stop the Instagram auto-fit for every content
+# type, forever. THIS is why a preset may change the PROMPT but never the
+# SCHEMA.
+CV_KEYS = ("hook", "funniness", "shock", "curiosity_gap", "value")
 
 
 # --- Cross-validation multipliers (v1 design values) ------------------------
