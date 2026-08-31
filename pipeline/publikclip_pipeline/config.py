@@ -82,6 +82,8 @@ class Settings:
     true_peak_db: float = -1.0
     llm_mode: str = "gemini"  # 'gemini' (BYO key) | 'ollama' (local fallback)
     caption_preset: str = "classic"
+    # 'talking' | 'gameplay' — the judgement profile; see presets.py.
+    content_preset: str = "talking"
     # jrgillick laughter specialist: 10 ms precision but ~300k CPU forward
     # passes on an hour-plus source. OFF by default — PANNs' AudioSet
     # laughter classes cover the bus at 320 ms resolution for a fraction of
@@ -95,6 +97,7 @@ class Settings:
             "true_peak_db": self.true_peak_db,
             "llm_mode": self.llm_mode,
             "caption_preset": self.caption_preset,
+            "content_preset": self.content_preset,
             "laughter_specialist": self.laughter_specialist,
         }
 
@@ -107,5 +110,8 @@ class Settings:
             true_peak_db=data.get("true_peak_db", -1.0),
             llm_mode=data.get("llm_mode", "gemini"),
             caption_preset=data.get("caption_preset", "classic"),
+            # .get with a default, never data[...]: every settings.json
+            # already on disk lacks the key and must still load.
+            content_preset=data.get("content_preset", "talking"),
             laughter_specialist=data.get("laughter_specialist", False),
         )

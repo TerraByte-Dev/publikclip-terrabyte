@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .. import presets
 from ..jobs.queue import Stage, StageContext, StageError
 from ..music import brief as music_brief
 from . import constants as constants_mod
@@ -87,6 +88,8 @@ class ScoreStage(Stage):
         arousal = np.asarray(curves.get("arousal", []), dtype=float)
         arousal_grid = float(curves.get("arousal_grid_sec", 0.5))
         arousal_source = curves.get("arousal_source", "dsp-proxy")
+        preset = presets.get(ctx.settings.content_preset)
+        min_words = preset["min_transcript_words"]
         heatmap = ingest.get("heatmap")
         scene_times = json.loads((ctx.job_dir / "scenes.json").read_text()) if (ctx.job_dir / "scenes.json").exists() else []
 
@@ -109,7 +112,11 @@ class ScoreStage(Stage):
             start, end = cand["start"], cand["end"]
             ctx.emit(i / max(1, len(candidates)) * 0.6, f"Scoring moment {i + 1}/{len(candidates)}…")
             labeled, flat = _transcript_slice(segments, start, end)
-            if len(flat.split()) < 20:
+            # Per-preset. At 20 this dropped 12 of 16 candidates on job
+            # 20260830-045743-ade561 — including the one that scores BEST when
+            # let through (9 words, 42.7, vs 37.1 for the best survivor). See
+            # presets.py for why the gameplay floor is 5 and not 0.
+            if len(flat.split()) < min_words:
                 continue
             window_events = _events_in(timeline, start, end)
             near_laughs = [e for e in _events_in(timeline, start, end, pad=3.0) if e["type"] == "laugh"]
@@ -118,7 +125,10 @@ class ScoreStage(Stage):
                 "events_desc": _events_desc(window_events),
             }
             try:
-                t1 = client.generate_json(rubric.t1_prompt(labeled, context), rubric.T1_SCHEMA)
+                t1 = client.generate_json(
+                    rubric.t1_prompt(labeled, context, profile=preset["rubric"]),
+                    rubric.T1_SCHEMA,
+                )
             except llm_mod.LlmError as err:
                 # Bad key, dead daemon, timeout: every remaining candidate would
                 # fail the same way. Abort as StageError so the message reaches

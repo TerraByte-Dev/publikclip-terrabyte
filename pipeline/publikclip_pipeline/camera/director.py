@@ -265,6 +265,35 @@ def punch_envelope(n_frames: int, fps: int, punches: list[Punch]) -> np.ndarray:
     return env
 
 
+def static_trajectory(
+    clip_start: float, clip_end: float, src_w: int, src_h: int
+) -> Trajectory:
+    """A centred, full-height 9:16 crop held for the whole clip.
+
+    Same base geometry as build_trajectory's crop block, minus every model.
+    Costs nothing downstream: renderer.sendcmd_lines() dedupes N identical
+    boxes to change points, so 1106 identical frames emit exactly 4 lines
+    (w/h/x/y at t=0) and the render is byte-for-byte an unanimated crop.
+    """
+    fps = ASD_FPS
+    n = max(1, int(round((clip_end - clip_start) * fps)))
+    base_h = float(src_h)
+    base_w = base_h * 9.0 / 16.0
+    if base_w > src_w:  # narrower-than-9:16 source: pillar-fit width instead
+        base_w = float(src_w)
+        base_h = base_w * 16.0 / 9.0
+    x = round((src_w - base_w) / 2.0, 2)
+    y = round((src_h - base_h) / 2.0, 2)
+    box = [x, y, round(base_w, 2), round(base_h, 2)]
+    return Trajectory(
+        fps=fps,
+        frames=[list(box) for _ in range(n)],
+        cuts=[],
+        punches=[],
+        meta={"tracks": 0, "speakers_canonical": {}, "switch_cuts": 0, "shot_cuts": 0},
+    )
+
+
 def build_trajectory(
     analysis: AsdAnalysis,
     turns: list[dict],
