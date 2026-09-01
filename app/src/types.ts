@@ -101,9 +101,12 @@ export interface GamePreset {
   base: string
   /** width/height of the screenshot the boxes were drawn on. */
   aspect: number
-  /** Absolute path to the screenshot, so the boxes can be re-opened and
-   *  redrawn later. Null once the file moves. */
+  /** Absolute path to the footage or screenshot the boxes were drawn on, so
+   *  they can be re-opened and redrawn later. Null once the file moves. */
   shot: string | null
+  /** Seconds into `shot` when it is a video — reopening seeks back here, so a
+   *  redraw starts from the same frame the boxes were drawn against. */
+  shot_t: number
   regions: HudRegion[]
 }
 

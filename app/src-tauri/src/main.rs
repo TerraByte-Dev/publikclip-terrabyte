@@ -361,12 +361,13 @@ fn preset_delete(name: String) -> Result<(), String> {
     fs::remove_file(&path).map_err(|e| e.to_string())
 }
 
-/// Let the webview display a screenshot the user just picked. Same reason
-/// edit_tool grants the clip's source: assetProtocol is scoped to
-/// $HOME/.publikclip/** and a screenshot lives wherever they saved it, so
-/// without this the <img> is silently blank with a 403 in the console.
+/// Let the webview show a file the user just picked - a screenshot OR a video
+/// they want to scrub for a frame. Same reason edit_tool grants the clip's
+/// source: assetProtocol is scoped to $HOME/.publikclip/** and their footage
+/// lives wherever they keep it, so without this the <img>/<video> is silently
+/// blank with a 403 in the console.
 #[tauri::command]
-fn allow_image(app: AppHandle, path: String) -> Result<String, String> {
+fn allow_media(app: AppHandle, path: String) -> Result<String, String> {
     let p = PathBuf::from(&path);
     if !p.exists() {
         return Err(format!("no such file: {path}"));
@@ -624,7 +625,7 @@ fn main() {
             preset_list,
             preset_save,
             preset_delete,
-            allow_image,
+            allow_media,
             save_gemini_key,
             get_setup_state,
             mark_onboarded,
