@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { confirm } from '@tauri-apps/plugin-dialog'
-import type { JobSummary } from '../types'
+import type { GamePreset, JobSummary } from '../types'
+import { api } from '../api'
 import KeyModal from './KeyModal'
 import SettingsModal from './SettingsModal'
 import PresetModal from './PresetModal'
@@ -36,7 +37,7 @@ interface Props {
   running: boolean
   stages: Record<string, { fraction: number; message: string }>
   error: string | null
-  onRun: (source: string, llm: string, captions: string, preset: string) => void
+  onRun: (source: string, llm: string, captions: string, preset: string, game: string | null) => void
   onOpenLoop: () => void
   onOpenJob: (id: string) => void
   onResume: (id: string, llm?: string) => void
@@ -48,6 +49,15 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
   const [llm, setLlm] = useState('gemini')
   const [captions, setCaptions] = useState('classic')
   const [preset, setPreset] = useState('talking')
+  const [game, setGame] = useState<string>('')
+  const [games, setGames] = useState<GamePreset[]>([])
+
+  // Re-read on every switch INTO gameplay rather than once on mount: the
+  // preset mapper is a sibling modal, so a game saved mid-session would
+  // otherwise not appear until the app restarted.
+  useEffect(() => {
+    if (preset === 'gameplay') api.presetList().then(setGames).catch(() => setGames([]))
+  }, [preset])
   const [showKey, setShowKey] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showPresets, setShowPresets] = useState(false)
@@ -140,13 +150,13 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
             <input
               value={source}
               onChange={(e) => setSource(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && source.trim() && !running && onRun(source.trim(), llm, captions, preset)}
+              onKeyDown={(e) => e.key === 'Enter' && source.trim() && !running && onRun(source.trim(), llm, captions, preset, preset === 'gameplay' && game ? game : null)}
               placeholder="YouTube URL or a path to a video file"
               disabled={running}
             />
             <button
               className="btn-primary"
-              onClick={() => onRun(source.trim(), llm, captions, preset)}
+              onClick={() => onRun(source.trim(), llm, captions, preset, preset === 'gameplay' && game ? game : null)}
               disabled={running || !source.trim()}
             >
               {running ? 'WORKING' : 'CUT IT'}
@@ -180,6 +190,36 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
                 </button>
               ))}
             </div>
+            {preset === 'gameplay' && (
+              <div className="opt-group">
+                <span className="opt-label">game</span>
+                {games.length === 0 ? (
+                  <span className="opt-none mono">none yet — make one in ⌗ game presets</span>
+                ) : (
+                  <>
+                    <button
+                      className={`opt ${game === '' ? 'opt-on' : ''}`}
+                      onClick={() => setGame('')}
+                      disabled={running}
+                      title="no HUD regions — a plain 9:16 crop"
+                    >
+                      none
+                    </button>
+                    {games.map((g) => (
+                      <button
+                        key={g.name}
+                        className={`opt ${game === g.name ? 'opt-on' : ''}`}
+                        onClick={() => setGame(g.name)}
+                        disabled={running}
+                        title={`${g.regions.length} HUD regions`}
+                      >
+                        {g.name}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
             <div className="opt-group">
               <span className="opt-label">captions</span>
               {CAPTION_PRESETS.map((preset) => (

@@ -74,6 +74,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         settings.caption_preset = args.captions
     if args.preset:
         settings.content_preset = args.preset
+    if args.game:
+        settings.game_preset = args.game
     if args.camera:
         settings.camera.speaker_change = args.camera
     elif args.preset:
@@ -94,7 +96,7 @@ def cmd_resume(args: argparse.Namespace) -> int:
         return 2
     # `or args.preset` is load-bearing: without it `resume --preset gameplay`
     # alone is silently ignored.
-    if args.llm or args.captions or args.camera or args.preset:
+    if args.llm or args.captions or args.camera or args.preset or args.game:
         settings = config.Settings.from_json(json.loads(job.settings_json))
         if args.llm:
             settings.llm_mode = args.llm
@@ -102,6 +104,8 @@ def cmd_resume(args: argparse.Namespace) -> int:
             settings.caption_preset = args.captions
         if args.preset:
             settings.content_preset = args.preset
+        if args.game:
+            settings.game_preset = args.game
         if args.camera:
             settings.camera.speaker_change = args.camera
         new_json = json.dumps(settings.to_json())
@@ -343,6 +347,8 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--camera", choices=["cut", "pan", "locked"], default=None)
     p_run.add_argument("--preset", choices=["talking", "gameplay"], default=None,
                        help="judgement profile for this source (see presets.py)")
+    p_run.add_argument("--game", default=None,
+                       help="game preset supplying HUD regions (PUBLIKCLIP_HOME/presets)")
     p_run.set_defaults(fn=cmd_run)
 
     p_resume = sub.add_parser("resume", help="resume a job from its checkpoints")
@@ -352,6 +358,8 @@ def main(argv: list[str] | None = None) -> int:
     p_resume.add_argument("--camera", choices=["cut", "pan", "locked"], default=None)
     p_resume.add_argument("--preset", choices=["talking", "gameplay"], default=None,
                           help="judgement profile for this source (see presets.py)")
+    p_resume.add_argument("--game", default=None,
+                          help="game preset supplying HUD regions (PUBLIKCLIP_HOME/presets)")
     p_resume.set_defaults(fn=cmd_resume)
 
     p_jobs = sub.add_parser("jobs", help="list jobs")

@@ -183,6 +183,11 @@ export default function PresetModal({ onClose }: Props) {
           games put the killfeed, the hotbar and the score — these boxes give them a home in the
           margins.
         </p>
+        <p className="preset-hint">
+          Margins are stretched to the full width, so draw them <em>wide and short</em>. A
+          squarish box becomes a band 4–5× its drawn height and swallows the gameplay — the
+          readout beside each region tells you how much of the frame it will take.
+        </p>
 
         {error && <p className="mono editor-err">{error}</p>}
 
@@ -319,6 +324,20 @@ export default function PresetModal({ onClose }: Props) {
                 </select>
                 <span className="mono preset-dims">
                   {(r.w * 100).toFixed(0)}×{(r.h * 100).toFixed(0)}%
+                  {r.role !== 'main' && (() => {
+                    // A margin is scaled to the full 1080 width, so its band
+                    // height is 1080*h/w — for a 22%-wide box that is ~4.5x
+                    // the height as drawn. Without this you cannot see that a
+                    // squarish killfeed crop eats a third of the frame until
+                    // the clip is rendered.
+                    const band = Math.round((1080 * r.h) / r.w)
+                    const pct = (band / 1920) * 100
+                    return (
+                      <span className={pct > 20 ? 'preset-band-warn' : 'preset-band'}>
+                        {' → '}{band}px, {pct.toFixed(0)}% of frame
+                      </span>
+                    )
+                  })()}
                 </span>
                 <button
                   className="opt ov-delete"

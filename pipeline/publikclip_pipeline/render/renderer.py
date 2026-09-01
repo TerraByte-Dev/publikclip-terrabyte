@@ -25,7 +25,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from . import ffmpeg_bin, loudness
+from . import ffmpeg_bin, layout, loudness
 
 OUT_W = 1080
 OUT_H = 1920
@@ -113,6 +113,7 @@ def render_clip(
     src_w: int = 1920,
     src_h: int = 1080,
     timeout: float = 1800.0,
+    bands: list | None = None,
 ) -> None:
     duration = clip_end - clip_start
     boxes = crop_boxes(trajectory["frames"], src_w, src_h)
@@ -142,6 +143,47 @@ def render_clip(
         vcodec = ["-c:v", "libx264", "-preset", "medium", "-crf", str(X264_CRF)]
 
     seek = ["-ss", f"{clip_start:.3f}", "-t", f"{duration:.3f}", "-i", media_path]
+
+    # Composite layout: HUD regions relocated into margins. A different graph
+    # entirely — no sendcmd, no animated crop — so it takes filter_complex
+    # rather than -vf, and the audio chain has to move in there with it
+    # (ffmpeg will not accept -af alongside a filter_complex that maps audio).
+    # The gameplay preset defaults the camera to 'locked', so nothing is lost
+    # by dropping the trajectory here: it was a static box already.
+    if bands:
+        vgraph = layout.filter_graph(bands, "0:v", "vb")
+        vlabel = "vb"
+        if ass_path is not None:
+            vgraph += (
+                f";[vb]subtitles=filename={_q(ass_path)}"
+                + (f":fontsdir={_q(fonts_dir)}" if fonts_dir else "")
+                + "[vf]"
+            )
+            vlabel = "vf"
+        measured = loudness.measure(
+            ffmpeg_bin.ffmpeg(), [*seek, "-vn"],
+            ["-af", loudness.analysis_filter(lufs, true_peak)],
+            timeout=min(timeout, 300.0),
+        )
+        vgraph += f";[0:a]{loudness.filter_str(lufs, true_peak, measured)}[af]"
+        args = [
+            ffmpeg_bin.ffmpeg(), "-y", "-v", "error",
+            *seek,
+            "-filter_complex", vgraph,
+            "-map", f"[{vlabel}]", "-map", "[af]",
+            *( ["-c:v", "h264_videotoolbox", "-b:v", VT_BITRATE, "-allow_sw", "1"]
+               if videotoolbox_available()
+               else ["-c:v", "libx264", "-preset", "medium", "-crf", str(X264_CRF)] ),
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+            "-movflags", "+faststart", "-map_metadata", "-1",
+            str(out_path),
+        ]
+        proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+        cmd_path.unlink(missing_ok=True)
+        if proc.returncode != 0:
+            raise RuntimeError(f"Render failed: {(proc.stderr or '')[-800:]}")
+        return
     # Pass 1. Nothing sits upstream of loudnorm in this command's -af chain, so
     # the same span with video off IS the audio pass 2 normalises — confirmed by
     # re-rendering those spans audio-only, which reproduced the finished files

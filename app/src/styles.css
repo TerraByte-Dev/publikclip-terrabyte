@@ -1329,3 +1329,7 @@ html.reduce-motion .deck-fill.indeterminate { width: 100%; opacity: 0.45; }
    frame - which is precisely where a hotbar lives. */
 .preset-scrub { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .preset-scrub input[type='range'] { flex: 1; accent-color: var(--accent); }
+.preset-hint { font-size: 11px; color: var(--dim); line-height: 1.5; margin: -6px 0 12px; }
+.preset-band { color: var(--green); }
+/* Past ~20% of the frame a margin stops being a margin. Semantic, not themed. */
+.preset-band-warn { color: var(--red); }

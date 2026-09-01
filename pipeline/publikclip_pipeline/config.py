@@ -84,6 +84,9 @@ class Settings:
     caption_preset: str = "classic"
     # 'talking' | 'gameplay' — the judgement profile; see presets.py.
     content_preset: str = "talking"
+    # Name of a game preset under PUBLIKCLIP_HOME/presets/ supplying HUD
+    # regions for the composite layout. None = today's single crop.
+    game_preset: str | None = None
     # jrgillick laughter specialist: 10 ms precision but ~300k CPU forward
     # passes on an hour-plus source. OFF by default — PANNs' AudioSet
     # laughter classes cover the bus at 320 ms resolution for a fraction of
@@ -98,6 +101,7 @@ class Settings:
             "llm_mode": self.llm_mode,
             "caption_preset": self.caption_preset,
             "content_preset": self.content_preset,
+            "game_preset": self.game_preset,
             "laughter_specialist": self.laughter_specialist,
         }
 
@@ -113,5 +117,6 @@ class Settings:
             # .get with a default, never data[...]: every settings.json
             # already on disk lacks the key and must still load.
             content_preset=data.get("content_preset", "talking"),
+            game_preset=data.get("game_preset"),
             laughter_specialist=data.get("laughter_specialist", False),
         )

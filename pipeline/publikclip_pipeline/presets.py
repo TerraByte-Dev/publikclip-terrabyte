@@ -14,6 +14,8 @@ for every content type, forever.
 
 from __future__ import annotations
 
+import json
+
 PRESETS: dict[str, dict] = {
     "talking": {
         "min_transcript_words": 20,
@@ -54,6 +56,33 @@ PRESETS: dict[str, dict] = {
 }
 
 DEFAULT = "talking"
+
+
+def _slug(name: str) -> str:
+    """Match the Rust side's preset_slug exactly — the app writes the file."""
+    out = "".join(c if c.isalnum() else "-" for c in name.strip().lower())
+    return out.strip("-")
+
+
+def load_game(name: str | None) -> dict | None:
+    """A game preset (HUD regions) from PUBLIKCLIP_HOME/presets/<slug>.json.
+
+    None for a missing or unreadable file rather than raising: a preset the
+    user deleted between queuing and running a job must degrade to today's
+    single crop, not kill the render at the last stage.
+    """
+    if not name:
+        return None
+    from . import config
+
+    path = config.home_dir() / "presets" / f"{_slug(name)}.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    return data if data.get("regions") else None
 
 
 def get(name: str | None) -> dict:

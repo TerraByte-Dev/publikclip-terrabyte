@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .. import presets
 from ..jobs.queue import Stage, StageContext, StageError
 
 
@@ -25,6 +26,8 @@ class RenderStage(Stage):
         # videos and looked like it had done nothing at all.
         if data.get("content_preset", "talking") != ctx.settings.content_preset:
             return False
+        if data.get("game_preset") != ctx.settings.game_preset:
+            return False  # layout changed → re-render
         if len(data.get("outputs", [])) != len((ctx.prior or {}).get("score", {}).get("clips", [])):
             return False
         return all(Path(c["path"]).exists() for c in data.get("outputs", []))
@@ -33,7 +36,7 @@ class RenderStage(Stage):
         import numpy as np
 
         from ..captions import ass as ass_mod
-        from . import ffmpeg_bin, renderer
+        from . import ffmpeg_bin, layout, renderer
 
         if not ffmpeg_bin.supports_captions():
             ctx.emit(-1, "No caption-capable ffmpeg found — fetching one…")
@@ -67,6 +70,25 @@ class RenderStage(Stage):
         preset = ctx.settings.caption_preset
         outputs = []
         clips = score["clips"]
+        # Composite layout, if this job named a game preset with HUD regions.
+        # Solved ONCE: the geometry depends only on the source dimensions, and
+        # a LayoutError names the offending region, so it must surface before
+        # any clip is encoded rather than on clip 7 of 9.
+        bands = None
+        game = presets.load_game(ctx.settings.game_preset)
+        if game:
+            try:
+                bands = layout.solve(game["regions"], src_w, src_h)
+            except layout.LayoutError as err:
+                raise StageError(f"{ctx.settings.game_preset} layout: {err}") from err
+            drawn = float(game.get("aspect") or 0)
+            if drawn and abs(drawn - src_w / src_h) > 0.02:
+                # Normalized boxes survive a resolution change but NOT an aspect
+                # change: games re-lay-out their HUD rather than rescaling it,
+                # so a 16:9 preset on 21:9 footage points at empty screen.
+                ctx.emit(-1, f"warning: {ctx.settings.game_preset} was drawn at "
+                             f"{drawn:.2f}:1 but this source is {src_w / src_h:.2f}:1")
+
         for i, clip in enumerate(clips):
             traj_path = camera["trajectories"].get(str(i))
             if not traj_path or not Path(traj_path).exists():
@@ -110,6 +132,7 @@ class RenderStage(Stage):
                     lufs=ctx.settings.lufs_target,
                     true_peak=ctx.settings.true_peak_db,
                     src_w=src_w, src_h=src_h,
+                    bands=bands,
                 )
             except RuntimeError as err:
                 raise StageError(str(err)) from err
@@ -146,6 +169,7 @@ class RenderStage(Stage):
             "captions_burned": captions_ok,
             "caption_preset": preset,
             "content_preset": ctx.settings.content_preset,
+            "game_preset": ctx.settings.game_preset,
             # What the clips were normalised TOWARD. A measured LUFS is not
             # actionable without it. Stage-level: it describes the run, and the
             # per-clip re-render only swaps one entry in outputs, so it survives.

@@ -95,6 +95,7 @@ fn run_job(
     llm: Option<String>,
     captions: Option<String>,
     preset: Option<String>,
+    game: Option<String>,
 ) -> Result<(), String> {
     let (program, base_args) = pipeline_invocation();
     std::thread::spawn(move || {
@@ -116,6 +117,13 @@ fn run_job(
         if let Some(profile) = preset {
             args.push("--preset".to_string());
             args.push(profile);
+        }
+        // The game preset supplies HUD regions for the composite layout. Only
+        // meaningful alongside --preset gameplay; the pipeline ignores it
+        // otherwise rather than erroring.
+        if let Some(g) = game {
+            args.push("--game".to_string());
+            args.push(g);
         }
         stream_pipeline(&app, &program, &args);
     });

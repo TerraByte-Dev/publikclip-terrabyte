@@ -2,8 +2,8 @@ import { invoke, convertFileSrc } from '@tauri-apps/api/core'
 import type { GamePreset, JobResults, JobSummary, LoopOverview, SetupState, SyncSummary } from './types'
 
 export const api = {
-  runJob: (source: string, llm: string, captions: string, preset: string) =>
-    invoke<void>('run_job', { source, llm, captions, preset }),
+  runJob: (source: string, llm: string, captions: string, preset: string, game: string | null) =>
+    invoke<void>('run_job', { source, llm, captions, preset, game }),
   resumeJob: (jobId: string, llm?: string, captions?: string, camera?: string) =>
     invoke<void>('resume_job', { jobId, llm, captions, camera }),
   jobResults: (jobId: string) => invoke<JobResults>('job_results', { jobId }),
