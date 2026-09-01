@@ -99,13 +99,13 @@ export default function App() {
   }, [refreshJobs])
 
   const startRun = useCallback(
-    async (source: string, llm: string, captions: string) => {
+    async (source: string, llm: string, captions: string, preset: string) => {
       setRunning(true)
       setRunError(null)
       setStages({})
       setResults(null)
       setActiveJob(null)
-      await api.runJob(source, llm, captions)
+      await api.runJob(source, llm, captions, preset)
     },
     []
   )

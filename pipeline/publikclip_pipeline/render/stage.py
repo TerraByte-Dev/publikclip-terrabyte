@@ -16,6 +16,17 @@ class RenderStage(Stage):
     def artifacts_ok(self, ctx: StageContext, data: dict) -> bool:
         if data.get("caption_preset") != ctx.settings.caption_preset:
             return False  # restyle requested → re-render
+        # A preset change re-runs score, which changes BOTH how many clips
+        # survive and which windows they are. Without this the stage reports
+        # "cached" and serves MP4s built from the previous score: measured on
+        # job 20260831-232257-1bbbdc, score.json held 9 clips and camera.json
+        # 9 trajectories while render.json still had the 4 outputs from the
+        # talking-head pass — so --preset gameplay produced byte-identical
+        # videos and looked like it had done nothing at all.
+        if data.get("content_preset", "talking") != ctx.settings.content_preset:
+            return False
+        if len(data.get("outputs", [])) != len((ctx.prior or {}).get("score", {}).get("clips", [])):
+            return False
         return all(Path(c["path"]).exists() for c in data.get("outputs", []))
 
     def run(self, ctx: StageContext) -> dict:
@@ -134,6 +145,7 @@ class RenderStage(Stage):
             "emoji_ok": emoji_ok,
             "captions_burned": captions_ok,
             "caption_preset": preset,
+            "content_preset": ctx.settings.content_preset,
             # What the clips were normalised TOWARD. A measured LUFS is not
             # actionable without it. Stage-level: it describes the run, and the
             # per-clip re-render only swaps one entry in outputs, so it survives.

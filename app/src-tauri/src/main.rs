@@ -89,7 +89,13 @@ fn pipeline_invocation() -> (String, Vec<String>) {
 }
 
 #[tauri::command]
-fn run_job(app: AppHandle, source: String, llm: Option<String>, captions: Option<String>) -> Result<(), String> {
+fn run_job(
+    app: AppHandle,
+    source: String,
+    llm: Option<String>,
+    captions: Option<String>,
+    preset: Option<String>,
+) -> Result<(), String> {
     let (program, base_args) = pipeline_invocation();
     std::thread::spawn(move || {
         let mut args = base_args.clone();
@@ -100,9 +106,16 @@ fn run_job(app: AppHandle, source: String, llm: Option<String>, captions: Option
             args.push("--llm".to_string());
             args.push(mode);
         }
-        if let Some(preset) = captions {
+        if let Some(style) = captions {
             args.push("--captions".to_string());
-            args.push(preset);
+            args.push(style);
+        }
+        // The judgement profile (presets.py). Distinct from --captions, which
+        // is only a burn-in style — this one changes the transcript gate, the
+        // T1 prompt and the camera default.
+        if let Some(profile) = preset {
+            args.push("--preset".to_string());
+            args.push(profile);
         }
         stream_pipeline(&app, &program, &args);
     });

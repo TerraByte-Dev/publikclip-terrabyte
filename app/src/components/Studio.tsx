@@ -20,13 +20,22 @@ const STAGE_LABELS: Record<string, string> = {
 }
 
 const CAPTION_PRESETS = ['classic', 'beast', 'hormozi', 'minimal', 'karaoke-pop']
+// The judgement profile — see pipeline presets.py. NOT a caption style:
+// it sets the transcript gate (20 words vs 5), the T1 prompt, and the
+// camera default. Gameplay is one profile, not one-per-game: a per-game
+// entry only earns its place once it carries something game-specific
+// (HUD regions, combat thresholds), which is the next milestone.
+const CONTENT_PRESETS: [string, string][] = [
+  ['talking', 'podcasts, vlogs, anything driven by what people say'],
+  ['gameplay', 'raw game capture — judges the moment, not the transcript']
+]
 
 interface Props {
   jobs: JobSummary[]
   running: boolean
   stages: Record<string, { fraction: number; message: string }>
   error: string | null
-  onRun: (source: string, llm: string, captions: string) => void
+  onRun: (source: string, llm: string, captions: string, preset: string) => void
   onOpenLoop: () => void
   onOpenJob: (id: string) => void
   onResume: (id: string, llm?: string) => void
@@ -37,6 +46,7 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
   const [source, setSource] = useState('')
   const [llm, setLlm] = useState('gemini')
   const [captions, setCaptions] = useState('classic')
+  const [preset, setPreset] = useState('talking')
   const [showKey, setShowKey] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
@@ -124,13 +134,13 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
             <input
               value={source}
               onChange={(e) => setSource(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && source.trim() && !running && onRun(source.trim(), llm, captions)}
+              onKeyDown={(e) => e.key === 'Enter' && source.trim() && !running && onRun(source.trim(), llm, captions, preset)}
               placeholder="YouTube URL or a path to a video file"
               disabled={running}
             />
             <button
               className="btn-primary"
-              onClick={() => onRun(source.trim(), llm, captions)}
+              onClick={() => onRun(source.trim(), llm, captions, preset)}
               disabled={running || !source.trim()}
             >
               {running ? 'WORKING' : 'CUT IT'}
@@ -147,6 +157,20 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
                   disabled={running}
                 >
                   {mode}
+                </button>
+              ))}
+            </div>
+            <div className="opt-group">
+              <span className="opt-label">source</span>
+              {CONTENT_PRESETS.map(([name, hint]) => (
+                <button
+                  key={name}
+                  className={`opt ${preset === name ? 'opt-on' : ''}`}
+                  onClick={() => setPreset(name)}
+                  disabled={running}
+                  title={hint}
+                >
+                  {name}
                 </button>
               ))}
             </div>
