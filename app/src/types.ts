@@ -82,6 +82,31 @@ export interface JobResults {
   candidates: { count: number; effective_weights: Record<string, number>; heatmap_present: boolean } | null
 }
 
+/** One HUD element worth keeping, normalized to the screenshot it was drawn
+ *  on. Normalization survives a resolution change; it does NOT survive an
+ *  aspect change, because games re-lay-out their HUD instead of rescaling it —
+ *  which is why GamePreset stamps the aspect it was drawn at. */
+export interface HudRegion {
+  name: string
+  role: 'margin_top' | 'margin_bottom' | 'main'
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export interface GamePreset {
+  name: string
+  /** The judgement profile this game inherits (presets.py). */
+  base: string
+  /** width/height of the screenshot the boxes were drawn on. */
+  aspect: number
+  /** Absolute path to the screenshot, so the boxes can be re-opened and
+   *  redrawn later. Null once the file moves. */
+  shot: string | null
+  regions: HudRegion[]
+}
+
 export interface JobSummary {
   id: string
   title: string | null

@@ -1,5 +1,5 @@
 import { invoke, convertFileSrc } from '@tauri-apps/api/core'
-import type { JobResults, JobSummary, LoopOverview, SetupState, SyncSummary } from './types'
+import type { GamePreset, JobResults, JobSummary, LoopOverview, SetupState, SyncSummary } from './types'
 
 export const api = {
   runJob: (source: string, llm: string, captions: string, preset: string) =>
@@ -9,6 +9,10 @@ export const api = {
   jobResults: (jobId: string) => invoke<JobResults>('job_results', { jobId }),
   listJobs: () => invoke<JobSummary[]>('list_job_dirs'),
   deleteJob: (jobId: string) => invoke<void>('delete_job', { jobId }),
+  presetList: () => invoke<GamePreset[]>('preset_list'),
+  presetSave: (preset: GamePreset) => invoke<string>('preset_save', { preset }),
+  presetDelete: (name: string) => invoke<void>('preset_delete', { name }),
+  allowImage: (path: string) => invoke<string>('allow_image', { path }),
   saveGeminiKey: (key: string) => invoke<boolean>('save_gemini_key', { key }),
   setupState: () => invoke<SetupState>('get_setup_state'),
   markOnboarded: () => invoke<void>('mark_onboarded'),

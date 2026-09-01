@@ -287,6 +287,96 @@ fn delete_job(job_id: String) -> Result<(), String> {
     fs::remove_dir_all(&dir).map_err(|e| format!("could not delete {job_id}: {e}"))
 }
 
+/// Game presets live as one JSON file each under PUBLIKCLIP_HOME/presets/, not
+/// in the binary: the whole point is that Tate adds a game and redraws its
+/// boxes without a rebuild. home_dir() and never a literal ~/.publikclip —
+/// the app repoints PUBLIKCLIP_HOME.
+fn presets_dir() -> PathBuf {
+    home_dir().join("presets")
+}
+
+/// Same whitelist as delete_job, for the same reason: this becomes a filename.
+fn preset_slug(name: &str) -> Option<String> {
+    let slug: String = name
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    let slug = slug.trim_matches('-').to_string();
+    if slug.is_empty() || slug.len() > 64 {
+        None
+    } else {
+        Some(slug)
+    }
+}
+
+#[tauri::command]
+fn preset_list() -> Result<Vec<Value>, String> {
+    let dir = presets_dir();
+    if !dir.exists() {
+        return Ok(vec![]);
+    }
+    let mut out = vec![];
+    for entry in fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        // A hand-edited file that no longer parses must not blank the whole
+        // list — skip it and keep the rest.
+        if let Some(v) = fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+        {
+            out.push(v);
+        }
+    }
+    out.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+    Ok(out)
+}
+
+#[tauri::command]
+fn preset_save(preset: Value) -> Result<String, String> {
+    let name = preset["name"].as_str().unwrap_or("").to_string();
+    let slug = preset_slug(&name).ok_or_else(|| format!("bad preset name {name:?}"))?;
+    let dir = presets_dir();
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(format!("{slug}.json"));
+    // Write-then-rename: the pipeline reads this directory while the app is
+    // open, and a half-written file is a parse error at job creation.
+    let tmp = dir.join(format!("{slug}.json.tmp"));
+    fs::write(&tmp, serde_json::to_string_pretty(&preset).unwrap()).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
+    Ok(slug)
+}
+
+#[tauri::command]
+fn preset_delete(name: String) -> Result<(), String> {
+    let slug = preset_slug(&name).ok_or_else(|| format!("bad preset name {name:?}"))?;
+    let path = presets_dir().join(format!("{slug}.json"));
+    if !path.exists() {
+        return Err(format!("no preset {slug}"));
+    }
+    fs::remove_file(&path).map_err(|e| e.to_string())
+}
+
+/// Let the webview display a screenshot the user just picked. Same reason
+/// edit_tool grants the clip's source: assetProtocol is scoped to
+/// $HOME/.publikclip/** and a screenshot lives wherever they saved it, so
+/// without this the <img> is silently blank with a 403 in the console.
+#[tauri::command]
+fn allow_image(app: AppHandle, path: String) -> Result<String, String> {
+    let p = PathBuf::from(&path);
+    if !p.exists() {
+        return Err(format!("no such file: {path}"));
+    }
+    app.asset_protocol_scope()
+        .allow_file(&p)
+        .map_err(|e| e.to_string())?;
+    Ok(path)
+}
+
 #[tauri::command]
 fn save_gemini_key(key: String) -> Result<bool, String> {
     let home = home_dir();
@@ -531,6 +621,10 @@ fn main() {
             job_results,
             list_job_dirs,
             delete_job,
+            preset_list,
+            preset_save,
+            preset_delete,
+            allow_image,
             save_gemini_key,
             get_setup_state,
             mark_onboarded,

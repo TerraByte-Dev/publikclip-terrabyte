@@ -3,6 +3,7 @@ import { confirm } from '@tauri-apps/plugin-dialog'
 import type { JobSummary } from '../types'
 import KeyModal from './KeyModal'
 import SettingsModal from './SettingsModal'
+import PresetModal from './PresetModal'
 
 const STAGE_ORDER = [
   'ingest', 'asr', 'diarize', 'events', 'candidates', 'score', 'camera', 'render'
@@ -49,6 +50,7 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
   const [preset, setPreset] = useState('talking')
   const [showKey, setShowKey] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showPresets, setShowPresets] = useState(false)
 
   async function askDelete(job: JobSummary) {
     const label = job.title ?? job.id
@@ -68,6 +70,7 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
       <div className="grain" />
       {showKey && <KeyModal onClose={() => setShowKey(false)} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showPresets && <PresetModal onClose={() => setShowPresets(false)} />}
       <aside className="rail">
         <header className="rail-brand">
           <span className="rail-logo">publikclip</span>
@@ -118,6 +121,9 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
           </button>
           <button className="btn-ghost" onClick={onOpenLoop}>
             ⟳ instagram loop
+          </button>
+          <button className="btn-ghost" onClick={() => setShowPresets(true)}>
+            ⌗ game presets
           </button>
           <button className="btn-ghost" onClick={() => setShowSettings(true)}>
             ⚙ settings
