@@ -277,19 +277,32 @@ class OllamaClient:
     def generate_json(
         self, prompt: str, schema: dict, images: list[bytes] | None = None
     ) -> dict:
-        if images:
-            # Text-only fallback: the caller records visual as signals_missing.
-            images = []
+        images = images or []
+        # Images ARE passed through now: qwen3.5 advertises `vision` in
+        # /api/tags and reads a game HUD crop correctly (5/2/2 kill rows on
+        # three Valorant frames, correctly empty on two others). A model
+        # without vision returns a normal answer that simply ignores them.
+        #
+        # The cache key MUST include the images. It used to hardcode [] here,
+        # which was harmless only because images were discarded one line above
+        # — lift that without this and every crop of every video collides on
+        # one key, so frame 2 onward is served frame 1's answer. On a 2700-crop
+        # scan that is a flat, confidently wrong curve.
         variant = f"think={OLLAMA_THINK};num_ctx={OLLAMA_NUM_CTX}"
         cache_file = (
             _cache_dir()
-            / f"{_cache_key(self.backend, self.model, prompt, schema, [], variant)}.json"
+            / f"{_cache_key(self.backend, self.model, prompt, schema, images, variant)}.json"
         )
         if cache_file.exists():
             return json.loads(cache_file.read_text())
+        message: dict = {"role": "user", "content": prompt}
+        if images:
+            import base64
+
+            message["images"] = [base64.b64encode(img).decode() for img in images]
         body = {
             "model": self.model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [message],
             "format": schema,
             "stream": False,
             # TOP-LEVEL, never inside "options" — see OLLAMA_THINK.
