@@ -205,13 +205,72 @@ killfeed row. **Needs his Overwatch footage first** — see Blockers.
 
 ---
 
+## VERIFIED ON REAL OVERWATCH (2026-09-02) — blocker #1 is RESOLVED
+
+Footage: `D:\PC Videos\Clips\2026-08-30 17-24-53-OBS-Recording.mp4`
+**49.6 GB, 2h38m, 1920x1080 @60fps, 41.9 Mbps.** A trimmed copy for testing is fine by Tate.
+
+**It is 6v6, not 5v5.** Counter digits go 0–6.
+
+**HUD geometry**, read off a real frame at t=3900 and confirmed by cropping it back out. Already
+written into `~/.publikclip/presets/overwatch.json`:
+
+| region | normalized rect | px | tell |
+|---|---|---|---|
+| `alive` (players-alive counter) | x .903 y .024 w .088 h .038 | 169x41 | `team_counter` |
+| `killfeed` | x .755 y .063 w .245 h .200 | 470x216 | `kill_feed` |
+| `HeroHP` | x .012 y .800 w .219 h .156 | 420x168 | — |
+| `gameplay` (main) | x .030 y .132 w .963 h .810 | 1849x875 | — |
+
+**Avoid y < 0.015** in the top-right — Tate's OBS overlay (FPS / TMP / LATENCY / clock) sits there,
+directly above the counter.
+
+**THE SCHEMA IS THE GUARDRAIL, NOT THE PROMPT.** Asked for a plain integer, qwen3.5 returned
+`{"readable": true, "blue": 0, "red": 49}` on a 3KB 6v6 counter crop — confident, impossible, with
+`readable` true. Constraining the field to `enum [0..6]` made the impossible unrepresentable:
+**0/20 bad answers** across five minutes of real footage. Do this for every numeric tell.
+
+**Measured counter reads, 15 s apart on real gameplay:**
+
+```
+6v6 -> 5v5 -> 3v5 -> 6v6 -> 6v5 -> 6v3 -> 5v3 -> 6v4 -> 4v6
+```
+
+Red falling to 3 twice inside 30 s is exactly the teamfight signal Tate described.
+**3.57 s warm** per counter sample; 5.6 s for the larger killfeed crop.
+
+**4 of 20 samples read `readable=false`** — death cams, respawn, menus, where the HUD is not drawn.
+`interest_curve` contributes NOTHING for those rather than zero: scoring a death cam as "calm"
+would bias the curve toward moments the player was dead for.
+
+**Cost on Tate's real 2h38m session:** every 5 s = 1,895 samples = **1.9 h**; every 2 s = 4.4 h.
+Both inside his stated budget.
+
+**`publikclip_pipeline/vision.py` exists** — a `TELLS` registry (`team_counter`, `kill_feed`), each
+a prompt plus a bounded schema, plus `crop_jpeg`, `scan`, `interest_curve`. Adding a game means
+adding a tell, never editing the scanner. Unit-checked (crop math, curve shape). The end-to-end
+scan over the 50 GB file was **NOT** completed — it blew a 10-minute limit. **Time the seek
+strategy before scanning a whole session**; sequential decode with frame skipping may well beat
+`CAP_PROP_POS_MSEC` seeking on a file that large.
+
+### What is left to make the clips actually change
+
+1. **Wire `vision.interest_curve` into `candidates/curve.py`** as a real channel with its own
+   weight, renormalized alongside dynamics/arousal/scenes/lexical. This is the step that makes
+   selection stop being 81% audio — everything before it is plumbing.
+2. Make the scan its own checkpointed stage, invalidated by `game_preset` and the interval.
+3. Feed tell counts into the T1 prompt so the judge knows a window held a 6v2 wipe. Confirm
+   `t1_prompt` reads any key you add — it currently reads only `duration` and `events_desc` and
+   would silently drop a new one.
+
+---
+
 ## Blockers for the next session
 
-1. **No raw Overwatch footage exists on this machine.** Everything was calibrated against stand-ins
-   — the four clips in `C:\Users\tatew\Downloads\` are Fortnite, Mordhau, Valorant and RotMG, none
-   of which are games Tate plays. Every time a HUD was guessed at this session it was wrong. Ask
-   for 60 s of raw Overwatch showing the killfeed and the players-alive counter before writing any
-   Overwatch-specific prompt or template.
+1. ~~No raw Overwatch footage~~ **RESOLVED 2026-09-02** — see above. Real footage, verified rects,
+   working prompts and schemas, measured costs. The one remaining Overwatch unknown: only the
+   *counter* was tested across 20 samples. Whether the **killfeed** tell reads as reliably is
+   untested.
 2. **The gameplay rubric is unvalidated and always has been.** `published_clips` and `ig_media` both
    have **0 rows** — nothing in this fork has ever been checked against a real outcome, for any
    content type. Anyone claiming the gaming rubric scores better is guessing. Tate's own idea for
