@@ -10,7 +10,7 @@ export default defineConfig({
     strictPort: true,
     // Vite watches the project root recursively, which reaches into
     // src-tauri/target/ — 2.2 GB of build output. The moment cargo relinks
-    // target/debug/deps/publikclip_app.exe, chokidar's watch on that file
+    // target/debug/deps/terraclip_app.exe, chokidar's watch on that file
     // throws EBUSY and takes the whole dev server down with it ("The
     // beforeDevCommand terminated with a non-zero status code"), so any run
     // that actually rebuilds the Rust side fails. Nothing under src-tauri is

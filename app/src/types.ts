@@ -88,11 +88,51 @@ export interface JobResults {
  *  which is why GamePreset stamps the aspect it was drawn at. */
 export interface HudRegion {
   name: string
-  role: 'margin_top' | 'margin_bottom' | 'main'
+  /** 'watch' is read by the scan but NEVER laid out. A players-alive box is
+   *  169x41px of information that costs 262px of a 1920px frame as a margin
+   *  band, because a margin is scaled to the full 1080 width. render/layout
+   *  only looks at margin_top/margin_bottom/main, so anything else is
+   *  invisible to it by construction. */
+  role: 'margin_top' | 'margin_bottom' | 'main' | 'watch'
   x: number
   y: number
   w: number
   h: number
+  /** What the watch stage should ASK about this box, per sample, all night.
+   *  Undefined means "layout only, never read" — which is free. This is the
+   *  field that makes selection game-specific: the box says where to look and
+   *  the tell says what the answer means. Values must exist in
+   *  terraclip_pipeline/vision.py TELLS. */
+  tell?: string
+}
+
+/** One number the model is allowed to answer with. `max`/`step` become the
+ *  enum: a bounded field is the only thing that stopped a 0-6 counter coming
+ *  back as 49. */
+export interface TellField {
+  name: string
+  max: number
+  step: number
+}
+
+/** A MODULE: one question asked of one box, and what the answer means. The
+ *  editor's shape; see tells.ts for the pipeline's. */
+export interface Tell {
+  id: string
+  label: string
+  prompt: string
+  fields: TellField[]
+  /** '' | 'count' | 'gap' */
+  score: { kind: string; field: string; saturate: number }
+  /** '' | 'drop' | 'rise' */
+  events: { kind: string; field: string; saturate: number; lead: number; trail: number }
+  curve_weight: number
+  /** Seconds between asks. 0 = every sample. */
+  interval: number
+  upscale: number
+  /** Keys a newer pipeline understands and this editor does not; carried
+   *  through a save rather than silently deleted. */
+  extra?: Record<string, unknown>
 }
 
 export interface GamePreset {
@@ -108,6 +148,20 @@ export interface GamePreset {
    *  redraw starts from the same frame the boxes were drawn against. */
   shot_t: number
   regions: HudRegion[]
+  /** Modules this preset defines for itself, keyed by tell id, in the
+   *  pipeline's own JSON shape. A preset is not limited to the questions that
+   *  happened to be useful for the games already shipped. */
+  tells?: Record<string, unknown>
+  /** The in-game name a `{player}` module matches against. Personal, not part
+   *  of the map — `terraclip preset share` strips it. */
+  player?: string
+  /** Which side is yours, for `{friendly}`/`{enemy}` in a field name. */
+  friendly?: string
+  /** Provenance, in the file, for whoever inherits it. A box invented from
+   *  memory of a default HUD and a box dragged onto a real frame produce
+   *  identical JSON; the difference is four hours of scanning. Shipped presets
+   *  say PLACEHOLDER or CHECKED and the pipeline's test suite enforces it. */
+  _note?: string
 }
 
 export interface JobSummary {
@@ -243,4 +297,69 @@ export interface SyncSummary {
   snapshots_pulled?: number
   tombstoned?: number
   fit?: { applied: boolean; version?: number; reason?: string }
+}
+
+
+/** One model Ollama has pulled, as the pipeline sees it. */
+export interface OllamaModel {
+  name: string
+  bytes: number
+  params: string | null
+  quant: string | null
+  family: string | null
+  chat: boolean
+  coder: boolean
+  /** Can it look at an image? The watch stage reads HUD CROPS, so a model
+   *  without this cannot do gameplay at all however good its prose is —
+   *  which is invisible in a list of names. */
+  vision: boolean
+  /** Bigger than the manifest bound the picker will consider resident. */
+  oversized: boolean
+}
+
+/** What the machine can run, read off the hardware rather than benchmarked. */
+export interface Hardware {
+  gpu: string | null
+  vram_gb: number | null
+  ram_gb: number | null
+  /** True only when the figure came from nvidia-smi. Windows' AdapterRAM is a
+   *  32-bit field, so every card 4 GB and over reads identically. */
+  trusted: boolean
+  vram_note?: string | null
+  advice: {
+    budget_gb: number | null
+    headline: string
+    body: string
+    start_with: string
+  }
+}
+
+export interface OllamaLibrary {
+  running: boolean
+  error?: string
+  url?: string
+  /** What a run would actually use right now. */
+  chosen?: string | null
+  /** What the picker would choose on its own. */
+  auto?: string | null
+  auto_error?: string | null
+  pinned?: string | null
+  /** TERRACLIP_OLLAMA_MODEL, which outranks a pinned choice. */
+  env?: string | null
+  max_manifest_bytes?: number
+  models: OllamaModel[]
+  /** Only present when asked for — probing costs a second or two. */
+  hardware?: Hardware
+}
+
+
+/** A caption style, named for what it looks like rather than for a person, and
+ *  carrying a still rendered by the pipeline's own renderer. Two of the three
+ *  caption faces are not loaded in the webview, so a CSS mock-up would show a
+ *  style nobody ever gets. */
+export interface CaptionStyle {
+  name: string
+  blurb: string
+  /** Absolute path under ~/.terraclip — inside the asset-protocol scope. */
+  preview: string | null
 }

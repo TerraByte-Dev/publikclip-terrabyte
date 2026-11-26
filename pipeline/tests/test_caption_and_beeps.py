@@ -5,8 +5,8 @@ rebuild the word list from diarize.json on every render. No monkeypatch and no
 mocking library: the functions take plain dicts and the rms curve as arguments,
 so the fixture IS the injection."""
 
-from publikclip_pipeline.edits.render_clip import beep_spans_out, caption_words
-from publikclip_pipeline.edits.timeline import Beep, ClipEdit, TimeRemap
+from terraclip_pipeline.edits.render_clip import beep_spans_out, caption_words
+from terraclip_pipeline.edits.timeline import Beep, ClipEdit, TimeRemap
 
 
 def _segments():
@@ -120,3 +120,30 @@ def test_round_trip_through_clip_edit_json():
     # a legacy file with neither key loads clean
     legacy = ClipEdit.from_json({"start": 1.0, "end": 2.0})
     assert legacy.caption_overrides == {} and legacy.beeps == []
+
+
+def test_every_old_caption_name_still_opens():
+    """RENAMING MUST NOT ORPHAN THE ARCHIVE.
+
+    Tate on the old names: "what the f*** is a hormozi... they just need better
+    names". Agreed — but every job dir already on disk stores one of them in its
+    settings.json, and a rename that made those unopenable would trade one
+    annoyance for a broken archive.
+    """
+    from terraclip_pipeline.captions import ass
+
+    for old, new in ass.ALIASES.items():
+        assert ass.resolve(old).name == new, old
+    for new in ass.DISPLAY:
+        assert ass.resolve(new).name == new
+    # An unknown name is the default, not a crash — a job dir written by a
+    # newer build has to open in an older one.
+    assert ass.resolve("something-nobody-shipped").name == "gold"
+    assert ass.resolve(None).name == "gold"
+
+
+def test_the_styles_and_their_descriptions_stay_in_step():
+    """A style with no description would render a blank card in the picker."""
+    from terraclip_pipeline.captions import ass
+
+    assert set(ass.DISPLAY) == set(ass.PRESETS), "every style needs a description"

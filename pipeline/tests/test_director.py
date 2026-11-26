@@ -2,9 +2,9 @@
 
 import numpy as np
 
-from publikclip_pipeline.camera import director
-from publikclip_pipeline.camera.asd import AsdAnalysis, ScoredTrack
-from publikclip_pipeline.camera.tracks import median_filter
+from terraclip_pipeline.camera import director
+from terraclip_pipeline.camera.asd import AsdAnalysis, ScoredTrack
+from terraclip_pipeline.camera.tracks import median_filter
 
 
 def _two_speaker_analysis(n=250):

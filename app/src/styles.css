@@ -1,5 +1,5 @@
 /* ============================================================
-   publikclip — "the editing bay"
+   terraclip — "the editing bay"
    Broadcast-monitor charcoal, themeable accent, ledger
    typography. Display: Archivo Black (same face the captions
    burn — the brand IS the captions). Body: Public Sans. Data:
@@ -36,6 +36,9 @@
   --panel-2: #1c1e23;
   --line: #26282e;
   --text: #ece9e2;         /* warm paper white */
+  /* Paired with --text so secondary copy is one token at an alpha rather
+     than a second fixed grey. TerraPlayer's --ink-rgb plays this role. */
+  --text-rgb: 236 233 226;
   --dim: #8b8e96;
   --faint: #55585f;
   /* THEMED — the only three tokens a [data-theme] block may override. :root IS
@@ -45,6 +48,11 @@
   --accent: #ffb224;        /* VU signal */
   --accent-rgb: 255 178 36;
   --accent-deep: #b97e15;
+  /* Secondary highlight. TerraPlayer's most-used accent after the primary
+     (74 uses there) and the token a TerraByte user reads as 'same family'.
+     Amber's partner is its own warm high end. */
+  --accent2: #FFD074;
+  --accent2-rgb: 255 208 116;
 
   /* Ink ON an accent fill. Exactly two consumers, ever: .btn-primary and
      .play-btn - every other `background: var(--accent)` is textless. Fixed,
@@ -71,7 +79,7 @@
    regressions. The alpha variants recolour for free because
    rgb(var(--accent-rgb) / a) resolves lazily on this same <html>.
 
-   'amber' has no block - it IS :root above (publikclip's own
+   'amber' has no block - it IS :root above (terraclip's own
    #ffb224, dE00 1.29 from the reference's #FFB000; the tightest
    gap between two DIFFERENT themes in the set is 10.10).
 
@@ -93,17 +101,62 @@
         safe (crimson 4.59); a=.15 is NOT (crimson 4.28) - which is
         why .chip-accent uses a flat --panel-2.
    ============================================================ */
-html[data-theme="mainframe"]   { --accent: #00FF88; --accent-rgb: 0 255 136;   --accent-deep: #00b862; }
-html[data-theme="matrix"]      { --accent: #39FF14; --accent-rgb: 57 255 20;   --accent-deep: #29b80e; }
-html[data-theme="ice"]         { --accent: #6FE6FF; --accent-rgb: 111 230 255; --accent-deep: #50a6b8; }
-html[data-theme="aqua"]        { --accent: #1EE8C4; --accent-rgb: 30 232 196;  --accent-deep: #16a78d; }
-html[data-theme="ultraviolet"] { --accent: #A06BFF; --accent-rgb: 160 107 255; --accent-deep: #7b52c4; }
-html[data-theme="synthwave"]   { --accent: #FF3AC8; --accent-rgb: 255 58 200;  --accent-deep: #bb2b93; }
-html[data-theme="vapor"]       { --accent: #FF8AD8; --accent-rgb: 255 138 216; --accent-deep: #b8639c; }
-html[data-theme="crimson"]     { --accent: #FF2E4D; --accent-rgb: 255 46 77;   --accent-deep: #cb253d; }
-html[data-theme="tangerine"]   { --accent: #FF7A18; --accent-rgb: 255 122 24;  --accent-deep: #b85811; }
-html[data-theme="gold"]        { --accent: #E8C46A; --accent-rgb: 232 196 106; --accent-deep: #a78d4c; }
-html[data-theme="slate"]       { --accent: #7FA8D9; --accent-rgb: 127 168 217; --accent-deep: #5b799c; }
+/* ── TerraByte, the house brand ──────────────────────────────────────────────
+   The ONE theme allowed to move the surfaces, because the published identity
+   specifies them: near-black GREEN, not the charcoal bay. Values copied from
+   02-Business/TerraByte Solutions LLC/03-Brand/assets/CLAUDE.md, which mirrors
+   terrabyte-site/src/styles/global.css. Mint does the heavy lifting and is
+   always the thing that glows; nothing else may. */
+html[data-theme="terrabyte"] {
+  --accent: #00e5a0;          /* signature mint */
+  --accent-rgb: 0 229 160;
+  --accent-deep: #00c48a;     /* hover, gradient end */
+  --accent2: #4aedc4;         /* brand accent-bright */
+  --accent2-rgb: 74 237 196;
+
+  --ink: #050a08;             /* bg-primary */
+  --panel: #0a1210;           /* bg-secondary */
+  --panel-2: #0d1a14;         /* bg-card */
+  --line: #1a2f24;            /* border */
+  --text: #e8f0ec;            /* text-primary */
+  --dim: #a1b0a8;             /* text-secondary */
+  --faint: #7d9688;           /* text-muted */
+
+  /* 4.9:1 on mint — the two textless-fill exceptions (.btn-primary, .play-btn)
+     need a dark ink, and the brand's own page base is the darkest thing here. */
+  --on-accent: #050a08;
+}
+
+/* The background motif from the brand: a fixed mint grid masked to the top,
+   with a radial mint glow behind it. Sparing — it sits under everything at 5%
+   and 8%, exactly the published alphas, and it is the first thing to go when
+   someone asks for reduced motion or no grain. */
+html[data-theme="terrabyte"] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(60% 40% at 50% 0%, rgba(0, 229, 160, 0.08), transparent 70%),
+    linear-gradient(rgba(0, 229, 160, 0.05) 1px, transparent 1px) 0 0 / 60px 60px,
+    linear-gradient(90deg, rgba(0, 229, 160, 0.05) 1px, transparent 1px) 0 0 / 60px 60px;
+  -webkit-mask-image: linear-gradient(#000, transparent 60%);
+  mask-image: linear-gradient(#000, transparent 60%);
+}
+html.grain-off[data-theme="terrabyte"] body::before { display: none; }
+
+html[data-theme="mainframe"]   { --accent: #00FF88; --accent-rgb: 0 255 136;   --accent-deep: #00b862; --accent2: #00E5FF; --accent2-rgb: 0 229 255; }
+html[data-theme="matrix"]      { --accent: #39FF14; --accent-rgb: 57 255 20;   --accent-deep: #29b80e; --accent2: #ADFF2F; --accent2-rgb: 173 255 47; }
+html[data-theme="ice"]         { --accent: #6FE6FF; --accent-rgb: 111 230 255; --accent-deep: #50a6b8; --accent2: #A8F2FF; --accent2-rgb: 168 242 255; }
+html[data-theme="aqua"]        { --accent: #1EE8C4; --accent-rgb: 30 232 196;  --accent-deep: #16a78d; --accent2: #78F5DC; --accent2-rgb: 120 245 220; }
+html[data-theme="ultraviolet"] { --accent: #A06BFF; --accent-rgb: 160 107 255; --accent-deep: #7b52c4; --accent2: #C9B0FF; --accent2-rgb: 201 176 255; }
+html[data-theme="synthwave"]   { --accent: #FF3AC8; --accent-rgb: 255 58 200;  --accent-deep: #bb2b93; --accent2: #00E5FF; --accent2-rgb: 0 229 255; }
+html[data-theme="vapor"]       { --accent: #FF8AD8; --accent-rgb: 255 138 216; --accent-deep: #b8639c; --accent2: #00E5FF; --accent2-rgb: 0 229 255; }
+html[data-theme="crimson"]     { --accent: #FF2E4D; --accent-rgb: 255 46 77;   --accent-deep: #cb253d; --accent2: #FF94A2; --accent2-rgb: 255 148 162; }
+html[data-theme="tangerine"]   { --accent: #FF7A18; --accent-rgb: 255 122 24;  --accent-deep: #b85811; --accent2: #FFC089; --accent2-rgb: 255 192 137; }
+html[data-theme="gold"]        { --accent: #E8C46A; --accent-rgb: 232 196 106; --accent-deep: #a78d4c; --accent2: #F5E0A0; --accent2-rgb: 245 224 160; }
+html[data-theme="slate"]       { --accent: #7FA8D9; --accent-rgb: 127 168 217; --accent-deep: #5b799c; --accent2: #A5C5E8; --accent2-rgb: 165 197 232; }
 
 html, body, #root { height: 100%; }
 
@@ -299,6 +352,9 @@ body {
 .studio {
   position: relative;
   height: 100%;
+  /* min-height:0 so the grid may shrink below its content: without it a long
+     job list pushes the grid taller than its row and the rail grows with it. */
+  min-height: 0;
   display: grid;
   grid-template-columns: 264px 1fr;
 }
@@ -319,7 +375,26 @@ body {
   letter-spacing: 0.01em;
 }
 .rail-sub { font-size: 11px; color: var(--faint); }
-.rail-jobs { padding: 18px 12px; overflow-y: auto; }
+.rail-jobs {
+  padding: 18px 12px 0;
+  /* A COLUMN THAT DOES NOT SCROLL. It used to be the scroller itself, which
+     carried the SESSIONS header, the status filters and the search box out of
+     view with the list — the three controls that exist to make a long list
+     shorter were the first things a long list hid. */
+  display: flex;
+  flex-direction: column;
+  /* flex:1 + min-height:0 is what actually pins .rail-foot. `overflow-y:auto`
+     alone does not: without a flex basis the list grows to its content height,
+     the column overflows the viewport, and `margin-top:auto` on the footer has
+     no leftover space to push into — so a week of jobs pushed the preset editor
+     off the bottom of the screen and you had to scroll the whole history to
+     reach it. */
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+/* ...and this is the only thing inside it that moves. */
+.jg-scroll { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 14px; }
 .rail-label {
   font-family: var(--mono);
   font-size: 10px;
@@ -388,6 +463,8 @@ body {
   position: relative;
   z-index: 2;
   padding: 64px 56px;
+  /* The middle column is now the only thing that scrolls in Studio. */
+  min-height: 0;
   overflow-y: auto;
   background:
     radial-gradient(900px 400px at 100% 0%, rgb(var(--accent-rgb) / 0.05), transparent 60%),
@@ -1294,7 +1371,36 @@ html.reduce-motion .deck-fill.indeterminate { width: 100%; opacity: 0.45; }
 .preset-margin_top { border-color: var(--green); background: rgba(61, 214, 163, 0.12); }
 .preset-margin_bottom { border-color: #7FA8D9; background: rgba(127, 168, 217, 0.12); }
 .preset-main { border-color: var(--accent); }
-.preset-box-on { box-shadow: 0 0 0 2px var(--text); }
+.preset-box-on { box-shadow: 0 0 0 2px var(--text); z-index: 3; }
+.preset-box { cursor: move; }
+
+/* Resize handles. Only the selected box grows them, so eight extra hit targets
+   never sit on top of the box you are trying to draw next to. */
+.preset-h {
+  position: absolute; width: 11px; height: 11px;
+  background: var(--accent); border: 1px solid var(--ink);
+  box-shadow: 0 0 0 1px rgb(var(--accent-rgb) / 0.5);
+  z-index: 4;
+}
+.preset-h-nw { left: -6px;  top: -6px;    cursor: nwse-resize; }
+.preset-h-n  { left: 50%;   top: -6px;    margin-left: -5px; cursor: ns-resize; }
+.preset-h-ne { right: -6px; top: -6px;    cursor: nesw-resize; }
+.preset-h-w  { left: -6px;  top: 50%;     margin-top: -5px; cursor: ew-resize; }
+.preset-h-e  { right: -6px; top: 50%;     margin-top: -5px; cursor: ew-resize; }
+.preset-h-sw { left: -6px;  bottom: -6px; cursor: nesw-resize; }
+.preset-h-s  { left: 50%;   bottom: -6px; margin-left: -5px; cursor: ns-resize; }
+.preset-h-se { right: -6px; bottom: -6px; cursor: nwse-resize; }
+
+/* Delete lives ON the selected box. It used to live only in a list that grows
+   past the fold, so removing a region meant scrolling to find its row. */
+.preset-box-x {
+  position: absolute; top: -1px; right: -1px; z-index: 5;
+  width: 20px; height: 20px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ink); color: var(--red, #ff5470);
+  border: 1px solid var(--line); cursor: pointer; font-size: 11px; padding: 0;
+}
+.preset-box-x:hover { background: var(--red, #ff5470); color: var(--ink); }
 .preset-box-tag {
   position: absolute; top: -1px; left: -1px;
   font-size: 9px; letter-spacing: 0.06em;
@@ -1307,7 +1413,11 @@ html.reduce-motion .deck-fill.indeterminate { width: 100%; opacity: 0.45; }
   padding: 34px; text-align: center; font-size: 11px;
 }
 
-.preset-list { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+.preset-list {
+  display: flex; flex-direction: column; gap: 4px; margin-top: 12px;
+  /* Six regions used to push SAVE and the saved-preset chips off screen. */
+  max-height: 190px; overflow-y: auto; padding-right: 4px;
+}
 .preset-item {
   display: flex; align-items: center; gap: 8px;
   background: var(--panel-2); border: 1px solid var(--line); padding: 6px 8px;
@@ -1333,3 +1443,619 @@ html.reduce-motion .deck-fill.indeterminate { width: 100%; opacity: 0.45; }
 .preset-band { color: var(--green); }
 /* Past ~20% of the frame a margin stops being a margin. Semantic, not themed. */
 .preset-band-warn { color: var(--red); }
+
+
+/* ── TerraByte shared chrome ─────────────────────────────────────────────────
+   Ported from TerraPlayer src/styles/index.css so a TerraByte user recognises
+   the controls. The two hardcoded gradient stops there (#16201b / #060a07) are
+   swapped for TerraClip's own surface tokens, so these follow the theme instead
+   of staying green. */
+
+/* The signature TerraByte button: a machined key that depresses. */
+.metal-key {
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--panel-2), var(--ink));
+  border: 1px solid rgb(var(--accent-rgb) / 0.18);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    inset 0 -1px 0 rgb(0 0 0 / 0.55),
+    0 1px 2px rgb(0 0 0 / 0.5);
+  color: var(--text);
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+.metal-key:hover { border-color: rgb(var(--accent-rgb) / 0.45); }
+.metal-key:active { box-shadow: inset 0 2px 3px rgb(0 0 0 / 0.6); }
+.metal-key.is-primary {
+  border-color: rgb(var(--accent-rgb) / 0.55);
+  color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 0 8px rgb(var(--accent-rgb) / 0.25);
+}
+
+/* A readout surface — timecode, duration, LUFS. Exactly the video-tool use
+   case TerraPlayer built it for. */
+.lcd-panel {
+  background: var(--bg-lcd, #04070a);
+  background-image: repeating-linear-gradient(
+    0deg, rgb(var(--accent-rgb) / 0.05) 0 1px, transparent 1px 3px);
+  border: 1px solid rgb(var(--accent-rgb) / 0.20);
+  border-radius: 3px;
+  font-family: var(--mono, monospace);
+  color: var(--accent);
+  text-shadow: 0 0 6px rgb(var(--accent-rgb) / 0.45);
+}
+
+/* The wordmark treatment. One class, one job. */
+.phosphor-glow {
+  text-shadow: 0 0 6px var(--accent), 0 0 12px rgb(var(--accent-rgb) / 0.5);
+}
+
+/* Scrollbars and selection, themed rather than default grey. */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--accent-rgb) / 0.15);
+  box-shadow: 0 0 4px rgb(var(--accent-rgb) / 0.25);
+}
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--accent-rgb) / 0.30); }
+::selection { background: rgb(var(--accent-rgb) / 0.25); }
+
+/* TerraPlayer has NO :focus-visible rule and sprays outline-none on inputs.
+   That is an accessibility bug, not a house style, so it is fixed here rather
+   than copied. */
+:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+
+
+/* the top bar: 30px, three zones, above every view. Ground is --ink rather than
+   TerraPlayer's hardcoded #000 — TerraClip's bay is a warm charcoal and a black
+   strip above it reads as a seam, not a bar. */
+.tb-bar {
+  position: sticky; top: 0; z-index: 40;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  height: 30px; padding: 0 8px;
+  background: var(--ink);
+  border-bottom: 1px solid rgb(var(--accent-rgb) / 0.18);
+  user-select: none;
+}
+.tb-brand { display: flex; align-items: center; gap: 8px; }
+.tb-mark {
+  width: 20px; height: 20px; display: block;
+  background-color: var(--accent);
+  -webkit-mask-size: contain; mask-size: contain;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+  filter: drop-shadow(0 0 4px rgb(var(--accent-rgb) / 0.55));
+}
+.tb-word { font-family: var(--mono, monospace); font-size: 11px;
+           letter-spacing: 0.22em; color: var(--accent); }
+.tb-mid { justify-self: center; }
+.tb-lcd { padding: 2px 10px; font-size: 10px; letter-spacing: 0.16em; }
+.tb-right { justify-self: end; display: flex; align-items: center; gap: 6px; }
+.tb-icon { width: 24px; height: 24px; display: grid; place-items: center;
+           font-size: 12px; cursor: pointer; padding: 0; }
+/* Deliberately no min-height. It used to be calc(100vh - 30px), which forced
+   the body at least a screen tall INSIDE a shell that was itself only
+   min-height:100vh — so the flex row had no definite height to divide, the
+   document scrolled instead of the pane, and every "height: 100%" below this
+   resolved against auto. That is why the rail footer scrolled away. */
+
+
+/* ── the settings surface ────────────────────────────────────────────────────
+   A fixed two-pane dialog with a nav rail, the shape TerraPlayer uses, so the
+   same object appears in both apps. Fixed size on purpose: a settings dialog
+   that resizes with its content makes the rail jump as you switch panes. */
+.st-scrim { background: rgb(0 0 0 / 0.72); }
+.st-dialog {
+  display: grid; grid-template-columns: 190px 1fr;
+  width: min(820px, calc(100vw - 32px));
+  height: min(580px, calc(100vh - 48px));
+  background: var(--panel);
+  border: 1px solid rgb(var(--accent-rgb) / 0.25);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.6);
+  overflow: hidden;
+}
+
+.st-rail {
+  display: flex; flex-direction: column;
+  background: var(--ink);
+  border-right: 1px solid rgb(var(--accent-rgb) / 0.12);
+  padding: 12px 0;
+}
+.st-rail-brand {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 14px 12px; font-size: 10px; letter-spacing: 0.2em;
+  color: rgb(var(--accent-rgb) / 0.55);
+}
+/* the app's own idiom: a small rotated mark that glows */
+.st-rail-dot {
+  width: 5px; height: 5px; background: var(--accent2);
+  transform: rotate(45deg); box-shadow: 0 0 6px var(--accent2);
+}
+.st-rail-item {
+  display: block; width: 100%; text-align: left;
+  padding: 9px 14px; background: none; cursor: pointer;
+  /* transparent when off so nothing shifts on selection — the rule is the
+     only thing that changes, never a size or a weight */
+  border: 0; border-left: 2px solid transparent;
+  color: rgb(var(--text-rgb) / 0.55);
+}
+.st-rail-item:hover { background: rgb(var(--accent-rgb) / 0.06); }
+.st-rail-item.is-on {
+  border-left-color: var(--accent);
+  background: rgb(var(--accent-rgb) / 0.08);
+  color: var(--accent);
+}
+.st-rail-label { display: block; font-size: 10px; letter-spacing: 0.18em; }
+.st-rail-blurb { display: block; font-size: 10px; color: var(--faint); margin-top: 2px; }
+.st-rail-foot { margin-top: auto; padding: 12px 14px 0; }
+
+.st-body { overflow-y: auto; padding: 20px 22px; }
+
+.st-section { padding-bottom: 20px; margin-bottom: 20px;
+              border-bottom: 1px solid rgb(var(--accent-rgb) / 0.10); }
+.st-section:last-child { border-bottom: 0; margin-bottom: 0; }
+.st-section-title {
+  margin: 0; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+  color: rgb(var(--accent-rgb) / 0.5);
+}
+.st-section-desc { margin: 6px 0 0; font-size: 12px; color: rgb(var(--text-rgb) / 0.55); }
+.st-section-body { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+
+.st-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.st-row-label { font-size: 12px; color: var(--text); }
+.st-row-help { font-size: 11px; color: var(--faint); margin-top: 2px; }
+.st-row-control { flex-shrink: 0; }
+
+.st-toggle {
+  width: 38px; height: 20px; padding: 0; cursor: pointer;
+  border-radius: 999px; border: 1px solid rgb(var(--accent-rgb) / 0.25);
+  background: var(--panel-2); position: relative; transition: background 140ms ease;
+}
+.st-toggle .st-knob {
+  position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+  border-radius: 50%; background: var(--faint); transition: left 140ms ease, background 140ms ease;
+}
+.st-toggle.is-on { background: rgb(var(--accent-rgb) / 0.18); border-color: rgb(var(--accent-rgb) / 0.55); }
+.st-toggle.is-on .st-knob { left: 20px; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+.st-seg { display: inline-flex; border: 1px solid rgb(var(--accent-rgb) / 0.2); }
+.st-seg-item {
+  padding: 5px 11px; font-size: 11px; background: none; border: 0; cursor: pointer;
+  color: rgb(var(--text-rgb) / 0.55);
+}
+.st-seg-item.is-on { background: rgb(var(--accent-rgb) / 0.14); color: var(--accent); }
+
+.st-slider { display: flex; align-items: center; gap: 10px; }
+.st-slider-val { padding: 2px 8px; font-size: 10px; min-width: 54px; text-align: center; }
+
+.st-key { padding: 5px 12px; font-size: 11px; cursor: pointer; }
+.st-key:disabled { opacity: 0.4; cursor: default; }
+.st-key.is-danger { color: var(--red); border-color: rgb(255 92 73 / 0.5); }
+
+.st-field { display: flex; gap: 8px; align-items: center; }
+.st-field input { width: 250px; font-size: 11px; padding: 5px 8px;
+                  background: var(--ink); color: var(--text);
+                  border: 1px solid rgb(var(--accent-rgb) / 0.2); }
+
+/* range inputs, themed once, globally */
+input[type="range"] { -webkit-appearance: none; appearance: none; height: 4px;
+                      background: rgb(var(--accent-rgb) / 0.2); }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 8px; height: 14px; border-radius: 0;
+  background: var(--accent); box-shadow: 0 0 6px rgb(var(--accent-rgb) / 0.6);
+}
+
+
+/* ── CRT ─────────────────────────────────────────────────────────────────────
+   The TerraByte house look, ported from TerraPlayer index.css. Scanlines ride
+   on `screen` so they lift the accent rather than dirtying the bay, and the
+   vignette is a plain radial so it costs nothing. Both hide under `crt-off`,
+   the same class name TerraPlayer uses, so the setting means the same thing in
+   both apps. */
+.crt-scanlines { position: relative; }
+.crt-scanlines::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 50;
+  background: repeating-linear-gradient(
+    180deg, transparent 0 2px, rgb(var(--accent-rgb) / 0.025) 2px 3px);
+  mix-blend-mode: screen;
+}
+.crt-vignette::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 49;
+  background: radial-gradient(ellipse 100% 80% at 50% 50%, transparent 60%, rgb(0 0 0 / 0.5) 100%);
+}
+html.crt-off .crt-scanlines::after,
+html.crt-off .crt-vignette::before { display: none; }
+
+/* ── the window's own title bar ──────────────────────────────────────────────
+   Frameless: this IS the chrome, so it owns dragging and the window buttons.
+   32px because it has to hold a 24px control and still look like a bar. */
+.tb-bar { height: 32px; }
+.tb-drag { -webkit-app-region: drag; app-region: drag; }
+.tb-nodrag { -webkit-app-region: no-drag; app-region: no-drag; }
+.tb-win { display: flex; align-items: center; gap: 2px; }
+.tb-win button {
+  width: 30px; height: 22px; display: grid; place-items: center;
+  background: none; border: 0; cursor: pointer; padding: 0;
+  color: rgb(var(--text-rgb) / 0.6); font-size: 11px; line-height: 1;
+}
+.tb-win button:hover { background: rgb(var(--accent-rgb) / 0.12); color: var(--accent); }
+/* Close is the one control that gets a real colour, because it is the one
+   that loses work. */
+.tb-win button.is-close:hover { background: var(--red); color: var(--ink); }
+
+/* HEIGHT, NOT MIN-HEIGHT. This is the whole fix for the rail footer.
+   `min-height: 100vh` leaves the flex container auto-height, so `flex: 1` on
+   the body resolves to its own content height, nothing ever scrolls at THIS
+   level, and the document scrolls instead — taking the rail with it. A
+   definite height here gives the body a definite slot, makes the body the
+   scroll container, and lets `.studio { height: 100% }` mean a screen. */
+.app-shell { height: 100vh; display: flex; flex-direction: column; }
+.app-shell > .app-body { flex: 1; min-height: 0; overflow: hidden; }
+
+
+/* ── grouped sessions ────────────────────────────────────────────────────────
+   The list had no structure, so a month of work read as one scroll. Day
+   headings come from the job id, which already carries its timestamp. */
+.jg-head { display: flex; align-items: baseline; justify-content: space-between; }
+.jg-count { font-size: 10px; color: var(--faint); }
+.jg-filters { display: flex; gap: 2px; margin: 6px 0 8px; }
+.jg-filter {
+  flex: 1; padding: 4px 0; font-size: 9px; letter-spacing: 0.12em;
+  background: none; cursor: pointer;
+  border: 1px solid rgb(var(--accent-rgb) / 0.14);
+  color: rgb(var(--text-rgb) / 0.5);
+}
+.jg-filter.is-on {
+  background: rgb(var(--accent-rgb) / 0.14);
+  border-color: rgb(var(--accent-rgb) / 0.45);
+  color: var(--accent);
+}
+.jg-search {
+  width: 100%; margin-bottom: 8px; padding: 5px 8px; font-size: 11px;
+  background: var(--ink); color: var(--text);
+  border: 1px solid rgb(var(--accent-rgb) / 0.16);
+}
+.jg-group { margin-bottom: 10px; }
+/* A day heading is a rule with a word on it — the divider IS the label, so it
+   costs no vertical space of its own. */
+.jg-day {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 0 4px; font-size: 9px; letter-spacing: 0.18em;
+  color: var(--accent2, var(--faint));
+}
+.jg-day::after {
+  content: ''; flex: 1; height: 1px;
+  background: rgb(var(--accent-rgb) / 0.12);
+}
+
+/* ── planner ─────────────────────────────────────────────────────────────────
+   The banner is silent when nothing is due. A strip that always shows
+   something trains you to stop reading it. */
+.pl-banner {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 5px 12px; cursor: pointer; text-align: left;
+  background: rgb(var(--accent-rgb) / 0.07);
+  border: 0; border-bottom: 1px solid rgb(var(--accent-rgb) / 0.16);
+  color: var(--text);
+}
+.pl-banner:hover { background: rgb(var(--accent-rgb) / 0.12); }
+.pl-banner.is-now { background: rgb(var(--accent-rgb) / 0.14); }
+.pl-banner.is-late { background: rgb(255 92 73 / 0.12); border-bottom-color: rgb(255 92 73 / 0.4); }
+.pl-when {
+  font-size: 9px; letter-spacing: 0.16em; padding: 2px 7px;
+  border: 1px solid rgb(var(--accent-rgb) / 0.4); color: var(--accent);
+}
+.pl-banner.is-late .pl-when { border-color: rgb(255 92 73 / 0.5); color: var(--red); }
+.pl-title { font-size: 12px; }
+.pl-dots { margin-left: auto; display: flex; gap: 4px; }
+.pl-dots span {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: rgb(var(--text-rgb) / 0.25);
+}
+.pl-dots span.on { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
+
+.pl-dialog {
+  width: min(680px, calc(100vw - 32px)); max-height: min(560px, calc(100vh - 48px));
+  display: flex; flex-direction: column;
+  background: var(--panel);
+  border: 1px solid rgb(var(--accent-rgb) / 0.25);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.6);
+}
+.pl-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px; border-bottom: 1px solid rgb(var(--accent-rgb) / 0.12);
+  font-size: 10px; letter-spacing: 0.2em; color: rgb(var(--accent-rgb) / 0.6);
+}
+.pl-head .st-key { margin-left: auto; }
+.pl-add { display: flex; gap: 8px; padding: 12px 16px;
+          border-bottom: 1px solid rgb(var(--accent-rgb) / 0.1); }
+.pl-add input {
+  padding: 5px 8px; font-size: 11px; background: var(--ink); color: var(--text);
+  border: 1px solid rgb(var(--accent-rgb) / 0.2);
+}
+.pl-add input[type="date"] { width: 140px; }
+.pl-add input:not([type="date"]) { flex: 1; }
+.pl-list { overflow-y: auto; padding: 8px 16px 16px; }
+.pl-row {
+  display: flex; align-items: center; gap: 10px; padding: 7px 0;
+  border-bottom: 1px solid rgb(var(--accent-rgb) / 0.07);
+}
+.pl-row-when { font-size: 9px; letter-spacing: 0.14em; color: var(--faint); width: 88px; }
+.pl-row.is-now .pl-row-when { color: var(--accent); }
+.pl-row.is-late .pl-row-when { color: var(--red); }
+.pl-row-date { font-size: 10px; color: var(--faint); }
+.pl-row-title { flex: 1; font-size: 12px; }
+
+
+/* ── the estimator ───────────────────────────────────────────────────────────
+   Two hours of footage, one question: will it be done before I wake up. */
+.pl-estimate { padding: 4px 16px 0; border-bottom: 1px solid rgb(var(--accent-rgb) / 0.1); }
+.es-len, .es-by { display: flex; align-items: center; gap: 6px; }
+.es-len input { width: 52px; padding: 4px 6px; font-size: 11px; text-align: right;
+                background: var(--ink); color: var(--text);
+                border: 1px solid rgb(var(--accent-rgb) / 0.2); }
+.es-by input { padding: 4px 6px; font-size: 11px; background: var(--ink);
+               color: var(--text); border: 1px solid rgb(var(--accent-rgb) / 0.2); }
+.es-unit { font-size: 10px; color: var(--faint); }
+.es-out { display: flex; align-items: center; gap: 14px; margin: 4px 0 2px; }
+/* The one number he came for, at a size that says so. */
+.es-total { padding: 6px 16px; font-size: 20px; letter-spacing: 0.04em; }
+.es-split { display: flex; flex-direction: column; gap: 2px;
+            font-size: 11px; color: var(--faint); }
+.es-split b { color: rgb(var(--text-rgb) / 0.8); font-weight: 500; }
+.es-when { font-size: 11px; color: var(--accent); }
+.es-when.is-late { color: var(--red); }
+
+/* ── preset editor ───────────────────────────────────────────────────────────
+   Two panes that scroll independently, so the picture never leaves the screen
+   while you edit a box drawn on it. The old layout stacked stage → scrubber →
+   region list → saved presets in one column, which meant scrolling the thing
+   you were looking at off the top in order to change it. */
+.pe-scrim { padding: 16px; align-items: stretch; }
+.pe-dialog {
+  display: grid; grid-template-rows: auto auto 1fr;
+  width: min(1500px, 100%); height: 100%;
+  margin: auto;
+  background: var(--panel);
+  border: 1px solid rgb(var(--accent-rgb) / 0.25);
+  border-top: 3px solid var(--accent);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.6);
+  overflow: hidden;
+}
+.pe-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; background: var(--ink);
+  border-bottom: 1px solid rgb(var(--accent-rgb) / 0.12);
+}
+.pe-title { font-size: 10px; letter-spacing: 0.2em; color: rgb(var(--accent-rgb) / 0.75); }
+.pe-name { flex: 1; min-width: 160px; }
+.pe-open { max-width: 200px; }
+.pe-err { margin: 8px 14px 0; }
+
+.pe-body { display: grid; grid-template-columns: 1fr 380px; min-height: 0; }
+.pe-stagewrap {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 14px; min-width: 0; min-height: 0; overflow: auto;
+}
+/* The frame is the anchor: it fits the pane rather than the pane scrolling to
+   it, so the boxes stay put while the rail beside them changes. */
+.pe-stage { max-height: calc(100vh - 190px); }
+.pe-stage .preset-shot { max-height: calc(100vh - 190px); width: 100%; object-fit: contain; }
+.pe-empty {
+  display: flex; flex-direction: column; gap: 12px; align-items: center;
+  justify-content: center; text-align: center; color: var(--dim);
+  height: 100%; padding: 40px;
+}
+.pe-empty p { max-width: 42ch; line-height: 1.6; }
+
+.pe-rail {
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--ink); border-left: 1px solid rgb(var(--accent-rgb) / 0.12);
+}
+.pe-tabs { display: flex; border-bottom: 1px solid var(--line); }
+.pe-tabs button {
+  flex: 1; background: none; border: 0; border-bottom: 2px solid transparent;
+  color: var(--faint); font: inherit; font-size: 10px; letter-spacing: 0.18em;
+  padding: 11px 6px; cursor: pointer;
+}
+.pe-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+.pe-tabs em { font-style: normal; color: var(--faint); margin-left: 5px; }
+.pe-pane { flex: 1; overflow-y: auto; padding: 12px; min-height: 0; }
+.pe-note { font-size: 11px; line-height: 1.6; color: var(--dim); margin: 0 0 12px; }
+.pe-tip { font-size: 10px; color: var(--faint); margin-top: 14px; text-align: center; }
+
+.pe-region { border: 1px solid var(--line); background: var(--panel); margin-bottom: 7px; }
+.pe-region.on { border-color: var(--accent); }
+.pe-region-head { display: flex; align-items: center; gap: 7px; padding: 7px 8px; cursor: pointer; }
+.pe-region-head input { flex: 1; min-width: 0; font-size: 11px; }
+.pe-region-body {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 10px 9px 12px; border-top: 1px solid var(--line);
+}
+.pe-lab, .tl-lab {
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 9px; letter-spacing: 0.18em; color: var(--faint);
+}
+.pe-lab select, .tl-lab input, .tl-lab textarea { font-size: 11px; }
+.tl-lab em { font-style: normal; font-size: 10px; letter-spacing: 0; line-height: 1.5; color: var(--faint); }
+.pe-band { font-size: 10px; line-height: 1.5; margin: -4px 0 0; }
+.pe-band em { font-style: normal; color: var(--text); }
+.pe-mini { align-self: flex-start; font-size: 10px; }
+
+.pe-mod { display: flex; align-items: stretch; border: 1px solid var(--line); margin-bottom: 6px; }
+.pe-mod.is-builtin { opacity: 0.66; }
+.pe-mod-open {
+  flex: 1; display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  background: none; border: 0; color: var(--text); font: inherit;
+  padding: 8px 9px; text-align: left; cursor: pointer;
+}
+.pe-mod.is-builtin .pe-mod-open { cursor: default; }
+.pe-mod-open b { font-size: 12px; }
+.pe-mod-open span { font-size: 10px; color: var(--accent2); }
+.pe-mod-open em { font-style: normal; font-size: 10px; color: var(--faint); line-height: 1.5; }
+/* The receipt behind a steering weight, and the absence of one. Loud on
+   purpose: a module at half weight that nobody has graded outvotes the ones
+   that work, and this panel is the last place that is visible. */
+.pe-measured { color: var(--green) !important; }
+.pe-unmeasured { color: var(--red) !important; }
+.pe-note.is-guess { color: var(--accent2); border-left: 2px solid var(--accent); padding-left: 8px; }
+.pe-add { width: 100%; margin: 4px 0 18px; }
+.pe-builtin-h { margin-top: 6px; }
+
+/* ── module editor ─────────────────────────────────────────────────────────── */
+.tl-editor { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.tl-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 4px; }
+.tl-sec { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.tl-sec-h { font-size: 9px; letter-spacing: 0.18em; color: var(--accent); }
+.tl-note { font-size: 10px; line-height: 1.6; color: var(--faint); margin: 0; }
+.tl-note b, .tl-note code { color: var(--text); }
+.tl-note em { font-style: normal; color: var(--text); }
+.tl-warn {
+  font-size: 10px; line-height: 1.6; margin: 0;
+  color: var(--accent2); border-left: 2px solid var(--accent2); padding-left: 8px;
+}
+.tl-warn code { color: var(--text); }
+.tl-field { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tl-field input:not(.tl-num), .tl-field select { flex: 1; min-width: 0; font-size: 11px; }
+.tl-num { width: 62px; font-size: 11px; }
+.tl-dim { font-size: 10px; color: var(--faint); white-space: nowrap; }
+.tl-add { align-self: flex-start; font-size: 10px; }
+.tl-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* ── work-log drawer ─────────────────────────────────────────────────────────
+   The stage list used to be a block in the main column: starting a job pushed
+   the input, the options and everything else down, and the app became a
+   progress screen for the four hours the job took. Same information, off to
+   the side, collapsed by default with the one line that matters on the tab. */
+.log {
+  position: fixed; top: 96px; right: 0; z-index: 5;
+  display: flex; align-items: flex-start;
+  transform: translateX(calc(100% - 132px));
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.log.is-open { transform: translateX(0); }
+.log-tab {
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  width: 132px; padding: 12px 8px;
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--line); border-right: 0;
+  font: inherit; cursor: pointer;
+}
+.log-tab:hover { border-color: var(--accent); }
+.log-tab-label { font-size: 10px; letter-spacing: 0.16em; color: var(--accent); }
+.log-tab-pct { font-size: 11px; color: var(--dim); }
+.log-caret { color: var(--faint); font-size: 13px; }
+.log-body {
+  width: 460px; max-height: calc(100vh - 140px); overflow-y: auto;
+  padding: 16px 18px 20px;
+  background: var(--panel); border: 1px solid var(--line); border-right: 0;
+}
+.log-body .deck-row { margin-bottom: 9px; }
+
+/* ── local brain ─────────────────────────────────────────────────────────────
+   What fills the middle when nothing is running. The answer a local-first tool
+   has to give before anyone trusts it: which model, on whose machine. */
+.lb { max-width: 720px; margin-top: 32px; }
+.lb-skel { height: 180px; margin-top: 32px; background: var(--panel); opacity: 0.4; }
+.lb-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.lb-head b { font-family: var(--display); font-size: 17px; }
+.lb-dim { font-size: 11px; color: var(--faint); }
+.lb-copy { font-size: 13px; line-height: 1.7; color: var(--dim); margin: 0 0 18px; max-width: 62ch; }
+.lb-copy b, .lb-copy em { color: var(--text); font-style: normal; }
+.lb-copy code { color: var(--accent2); }
+.lb-help { margin-top: 14px; font-size: 12px; }
+.lb-link {
+  background: none; border: 0; padding: 0; font: inherit;
+  color: var(--accent); cursor: pointer; text-decoration: underline;
+}
+.lb-now {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1px;
+  background: var(--line); border: 1px solid var(--line); margin-bottom: 16px;
+}
+.lb-now > div { background: var(--panel); padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.lb-lab { font-size: 9px; letter-spacing: 0.18em; color: var(--faint); }
+.lb-now b { font-size: 14px; word-break: break-all; }
+.lb-now em { font-style: normal; font-size: 10px; line-height: 1.5; color: var(--faint); }
+.lb-ok { color: var(--green); }
+.lb-no { color: var(--red); }
+.lb-toggle {
+  background: none; border: 0; padding: 0; font: inherit; font-size: 12px;
+  color: var(--accent); cursor: pointer;
+}
+.lb-list { display: flex; flex-direction: column; gap: 5px; margin-top: 12px; }
+.lb-model {
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  padding: 9px 12px; text-align: left; font: inherit;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--line); cursor: pointer;
+}
+.lb-model:hover:not(:disabled) { border-color: var(--accent); }
+.lb-model.on { border-color: var(--accent); background: rgb(var(--accent-rgb) / 0.07); }
+.lb-model.is-off { opacity: 0.45; cursor: not-allowed; }
+.lb-model b { font-size: 12px; }
+.lb-model span { font-size: 10px; color: var(--accent2); }
+.lb-model em { font-style: normal; font-size: 10px; color: var(--faint); }
+
+/* ── caption picker ──────────────────────────────────────────────────────────
+   Five names told you nothing about five looks, and one of them was a person's
+   name. The still under each is rendered by the pipeline's own caption
+   renderer — libass, the vendored faces, the same build_ass the render stage
+   calls — because two of the three faces are not loaded in the webview and a
+   CSS mock-up would show a style nobody ever gets. */
+.cap-group { align-items: flex-start; }
+.cap-strip { display: flex; gap: 8px; flex-wrap: wrap; }
+.cap {
+  display: flex; flex-direction: column; gap: 0;
+  width: 214px; padding: 0; overflow: hidden;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--line); cursor: pointer; font: inherit;
+  transition: border-color 0.15s;
+}
+.cap:hover:not(:disabled) { border-color: var(--accent); }
+.cap-on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.cap:disabled { opacity: 0.55; cursor: default; }
+.cap img { display: block; width: 100%; height: auto; }
+.cap-noimg { display: block; padding: 26px 0; text-align: center; font-size: 10px; color: var(--faint); }
+.cap-name {
+  padding: 7px 9px 0; font-size: 11px; letter-spacing: 0.14em;
+  text-align: left; color: var(--accent);
+}
+.cap-on .cap-name { color: var(--accent); }
+.cap-blurb {
+  padding: 3px 9px 9px; font-size: 10px; line-height: 1.45;
+  text-align: left; color: var(--faint);
+}
+.lb-actions { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+.lb-hw {
+  margin-top: 14px; padding: 14px 16px;
+  background: var(--panel); border: 1px solid var(--line); border-left: 2px solid var(--accent);
+}
+.lb-hw-specs { display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; }
+.lb-hw-specs span { font-size: 11px; color: var(--dim); }
+.lb-hw-head { display: block; font-size: 14px; margin-bottom: 6px; }
+.lb-hw code {
+  background: var(--ink); border: 1px solid var(--line);
+  padding: 2px 7px; color: var(--accent2); font-size: 12px;
+}
+.lb-hw .lb-copy:last-child { margin-bottom: 0; }
+
+/* ── the brief ───────────────────────────────────────────────────────────────
+   "Reveal AI instructions": one page, generated from the live pipeline, that a
+   person can follow and a chat model can act on. Rendered as preformatted text
+   on purpose — it is Markdown, and the point is that it survives a copy. */
+.pe-brief-scrim { padding: 22px; align-items: stretch; z-index: 12; }
+.pe-brief {
+  display: grid; grid-template-rows: auto 1fr;
+  width: min(900px, 100%); height: 100%; margin: auto;
+  background: var(--panel); border: 1px solid rgb(var(--accent-rgb) / 0.25);
+  border-top: 3px solid var(--accent); overflow: hidden;
+}
+.pe-brief-hint { flex: 1; font-size: 11px; color: var(--dim); }
+.pe-brief-body {
+  margin: 0; padding: 20px 26px 40px; overflow: auto;
+  font-family: var(--mono); font-size: 12px; line-height: 1.75;
+  color: var(--text); white-space: pre-wrap; word-break: break-word;
+  tab-size: 2;
+}

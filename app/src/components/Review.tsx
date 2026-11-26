@@ -394,7 +394,7 @@ export default function Review({ results, onBack, onRestyle }: Props) {
               </div>
             ) : (
               <p className="loud-none mono">
-                not measured \u2014 rendered before publikclip started reading levels
+                not measured \u2014 rendered before terraclip started reading levels
               </p>
             )}
 

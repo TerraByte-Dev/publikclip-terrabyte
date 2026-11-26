@@ -1,0 +1,215 @@
+{
+  "name": "Brawlhalla 1v1",
+  "base": "gameplay",
+  "aspect": 1.7777777777777777,
+  "_note": "REGIONS ARE PLACEHOLDERS, measured on zero frames of this game. Draw them on your own screenshot in the app before the first run. Every tell ships at curve_weight 0.0 \u2014 run once, then `terraclip grade <job> --tell <tell>` to earn it a weight.",
+  "regions": [
+    {
+      "name": "gameplay",
+      "role": "main",
+      "x": 0,
+      "y": 0,
+      "w": 1,
+      "h": 0.86
+    },
+    {
+      "name": "player panels",
+      "role": "margin_bottom",
+      "x": 0.28,
+      "y": 0.845,
+      "w": 0.44,
+      "h": 0.145,
+      "tell": "brawl_stocks"
+    },
+    {
+      "name": "player panels (damage read)",
+      "role": "watch",
+      "x": 0.28,
+      "y": 0.845,
+      "w": 0.44,
+      "h": 0.145,
+      "tell": "brawl_damage"
+    }
+  ],
+  "tells": {
+    "brawl_stocks": {
+      "label": "opponent stocks",
+      "prompt": "This crop is the row of PLAYER PANELS along the bottom of a Brawlhalla screen. Each panel belongs to ONE player and shows, together: that player's legend portrait, their NAME in small text, a large damage number, and a small row of STOCK ICONS \u2014 one icon per life. A match normally starts with 3 stocks each.\n\nThe player we care about is called {player}.\n\nReport only what is DRAWN. Never infer a stock count from the damage number, from the action on screen, or from how the match seems to be going. Never guess a number you cannot see.\n\nAnswer in this order:\n\n1. panels \u2014 how many player PANELS are drawn in this crop. Count the panels themselves, not how many players you think are in the match. Answer 0 when no panel row is drawn at all.\n\n2. name_found \u2014 1 if the name printed on one of those panels reads {player}; 0 if no panel carries that name. Judge by the letters that are printed, never by which panel is on the left, never by the portrait.\n\n3. readable \u2014 this question is ONLY about a ONE-ON-ONE. Set readable=false when ANY of these is true: panels is not exactly 2 (a 2v2, a free-for-all, or any match with three or more panels drawn); name_found is 0; this is a menu, a lobby, map or legend select, the end-of-match results screen, a loading screen or a black frame; the icons are covered and cannot be counted; or a panel shows MORE THAN 3 stock icons, which means this is not a standard 3-stock match. Ordinary one-on-one gameplay with {player}'s name on a panel is READABLE. Do not answer readable=true and then guess.\n\n4. mine_stocks \u2014 how many stock icons are drawn on the panel whose name reads {player}. COUNT ONLY THE ICONS DRAWN BRIGHT AND FILLED. If an icon is greyed out, dimmed, hollowed, or drawn as an empty outline, that stock has already been lost and must NOT be counted. If every icon on a panel looks identical and none of them is dimmed, count them all. Answer 0 if none are left. Use -1 when readable is false.\n\n5. foes_stocks \u2014 the same count on the OTHER panel, the one that is not {player}'s, counted the same way: bright and filled only. Use -1 when readable is false.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "panels": {
+            "type": "integer",
+            "enum": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          "name_found": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "readable": {
+            "type": "boolean"
+          },
+          "mine_stocks": {
+            "type": "integer",
+            "enum": [
+              -1,
+              0,
+              1,
+              2,
+              3
+            ]
+          },
+          "foes_stocks": {
+            "type": "integer",
+            "enum": [
+              -1,
+              0,
+              1,
+              2,
+              3
+            ]
+          }
+        },
+        "required": [
+          "panels",
+          "name_found",
+          "readable",
+          "mine_stocks",
+          "foes_stocks"
+        ],
+        "additionalProperties": false
+      },
+      "score": {
+        "kind": "gap",
+        "field": "foes_stocks",
+        "full": 3,
+        "floor": 0.15
+      },
+      "events": {
+        "kind": "delta",
+        "direction": "down",
+        "field": "foes_stocks",
+        "saturate": 1,
+        "lead": 12,
+        "trail": 2,
+        "min_delta": 1
+      },
+      "curve_weight": 0,
+      "interval": 10,
+      "upscale": 2,
+      "interest": "brawl_stocks"
+    },
+    "brawl_damage": {
+      "label": "opponent damage",
+      "prompt": "This crop is the row of PLAYER PANELS along the bottom of a Brawlhalla screen. Each panel belongs to ONE player and shows that player's NAME in small text and, in large digits, their DAMAGE \u2014 a number that starts at 0 at the beginning of every stock, climbs as that player gets hit, and returns to 0 the moment they are knocked out. A high number means that player is close to being knocked out.\n\nThe player we care about is called {player}.\n\nREAD THE DIGITS. Do not estimate the number from the colour of the text \u2014 Brawlhalla warms the digits as damage climbs and that colour is not what you are being asked for. Do not estimate it from the action on screen. Read what is printed.\n\nAnswer in this order:\n\n1. panels \u2014 how many player PANELS are drawn in this crop. Count the panels themselves, not how many players you think are in the match. Answer 0 when no panel row is drawn at all.\n\n2. name_found \u2014 1 if the name printed on one of those panels reads {player}; 0 if no panel carries that name. Judge by the letters that are printed, never by which panel is on the left, never by the portrait.\n\n3. readable \u2014 this question is ONLY about a ONE-ON-ONE. Set readable=false when ANY of these is true: panels is not exactly 2 (a 2v2, a free-for-all, or any match with three or more panels drawn); name_found is 0; this is a menu, a lobby, map or legend select, the end-of-match results screen, a loading screen or a black frame; or the digits are covered and cannot be read. Ordinary one-on-one gameplay is READABLE, including a panel reading 0 \u2014 a printed 0 is a real reading, not a missing one.\n\n4. foes_damage \u2014 the damage number printed on the OTHER panel, the one that is not {player}'s. Read it, then round it to the nearest 10 (0 stays 0, 7 -> 10, 46 -> 50, 113 -> 110). If it is larger than 500, answer 500. Use -1 when readable is false. Never invent a number.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "panels": {
+            "type": "integer",
+            "enum": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          "name_found": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "readable": {
+            "type": "boolean"
+          },
+          "foes_damage": {
+            "type": "integer",
+            "enum": [
+              -1,
+              0,
+              10,
+              20,
+              30,
+              40,
+              50,
+              60,
+              70,
+              80,
+              90,
+              100,
+              110,
+              120,
+              130,
+              140,
+              150,
+              160,
+              170,
+              180,
+              190,
+              200,
+              210,
+              220,
+              230,
+              240,
+              250,
+              260,
+              270,
+              280,
+              290,
+              300,
+              310,
+              320,
+              330,
+              340,
+              350,
+              360,
+              370,
+              380,
+              390,
+              400,
+              410,
+              420,
+              430,
+              440,
+              450,
+              460,
+              470,
+              480,
+              490,
+              500
+            ]
+          }
+        },
+        "required": [
+          "panels",
+          "name_found",
+          "readable",
+          "foes_damage"
+        ],
+        "additionalProperties": false
+      },
+      "score": {
+        "kind": "count",
+        "field": "foes_damage",
+        "saturate": 200
+      },
+      "curve_weight": 0,
+      "interval": 10,
+      "upscale": 2,
+      "interest": "brawl_damage"
+    }
+  },
+  "watch_interval": 5
+}

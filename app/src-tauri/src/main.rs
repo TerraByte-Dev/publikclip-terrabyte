@@ -1,5 +1,5 @@
-// publikclip desktop shell. The pipeline is a Python sidecar speaking JSONL
-// on stdout (`publikclip --jsonl ...`); this shell spawns it, forwards every
+// terraclip desktop shell. The pipeline is a Python sidecar speaking JSONL
+// on stdout (`terraclip --jsonl ...`); this shell spawns it, forwards every
 // event to the frontend, and exposes small filesystem/settings commands.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -14,10 +14,10 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
 
 fn home_dir() -> PathBuf {
-    if let Ok(custom) = std::env::var("PUBLIKCLIP_HOME") {
+    if let Ok(custom) = std::env::var("TERRACLIP_HOME") {
         return PathBuf::from(custom);
     }
-    dirs_home().join(".publikclip")
+    dirs_home().join(".terraclip")
 }
 
 fn dirs_home() -> PathBuf {
@@ -57,14 +57,14 @@ fn pipeline_invocation() -> (String, Vec<String>) {
                 "--directory".to_string(),
                 pipeline_dir.to_string_lossy().to_string(),
                 "run".to_string(),
-                "publikclip".to_string(),
+                "terraclip".to_string(),
             ],
         )
     } else {
         // Packaged: bundled uv + pipeline source under the platform's
         // resource layout — macOS keeps them in the .app's Resources dir,
         // Windows (NSIS) lands them in resources\ next to the exe. The venv
-        // bootstraps into PUBLIKCLIP_HOME on first run (uv handles Python
+        // bootstraps into TERRACLIP_HOME on first run (uv handles Python
         // 3.12 download + deps; the onboarding screen owns expectations).
         let exe_dir = std::env::current_exe()
             .ok()
@@ -82,7 +82,7 @@ fn pipeline_invocation() -> (String, Vec<String>) {
                 "--directory".to_string(),
                 resources.join("pipeline").to_string_lossy().to_string(),
                 "run".to_string(),
-                "publikclip".to_string(),
+                "terraclip".to_string(),
             ],
         )
     }
@@ -295,10 +295,10 @@ fn delete_job(job_id: String) -> Result<(), String> {
     fs::remove_dir_all(&dir).map_err(|e| format!("could not delete {job_id}: {e}"))
 }
 
-/// Game presets live as one JSON file each under PUBLIKCLIP_HOME/presets/, not
+/// Game presets live as one JSON file each under TERRACLIP_HOME/presets/, not
 /// in the binary: the whole point is that Tate adds a game and redraws its
-/// boxes without a rebuild. home_dir() and never a literal ~/.publikclip —
-/// the app repoints PUBLIKCLIP_HOME.
+/// boxes without a rebuild. home_dir() and never a literal ~/.terraclip —
+/// the app repoints TERRACLIP_HOME.
 fn presets_dir() -> PathBuf {
     home_dir().join("presets")
 }
@@ -371,7 +371,7 @@ fn preset_delete(name: String) -> Result<(), String> {
 
 /// Let the webview show a file the user just picked - a screenshot OR a video
 /// they want to scrub for a frame. Same reason edit_tool grants the clip's
-/// source: assetProtocol is scoped to $HOME/.publikclip/** and their footage
+/// source: assetProtocol is scoped to $HOME/.terraclip/** and their footage
 /// lives wherever they keep it, so without this the <img>/<video> is silently
 /// blank with a 403 in the console.
 #[tauri::command]
@@ -441,6 +441,90 @@ async fn check_ollama() -> Result<Value, String> {
     Ok(json!({"running": true, "models": models}))
 }
 
+/// The local model library, answered by the pipeline rather than by reading
+/// /api/tags here. The ranking that chooses a judge is thirty lines of
+/// hard-won ordering; a second copy in this shell would eventually disagree
+/// with the one that actually runs, and the user would see a picker that names
+/// a different model than the job used.
+#[tauri::command]
+async fn ollama_library(pin: Option<String>, hardware: Option<bool>) -> Result<Value, String> {
+    let (program, base_args) = pipeline_invocation();
+    let mut full = base_args;
+    full.push("models".to_string());
+    if let Some(name) = pin {
+        full.push("--pin".to_string());
+        full.push(name);
+    }
+    if hardware.unwrap_or(false) {
+        full.push("--hardware".to_string());
+    }
+    let out = quiet_command(&program)
+        .args(&full)
+        .output()
+        .map_err(|e| e.to_string())?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let line = stdout.lines().rev().find(|l| l.trim_start().starts_with('{'));
+    line.and_then(|l| serde_json::from_str::<Value>(l).ok())
+        .ok_or_else(|| {
+            format!(
+                "could not read the model library: {}",
+                String::from_utf8_lossy(&out.stderr).chars().take(400).collect::<String>()
+            )
+        })
+}
+
+/// The "how do I add a game" page, generated from the live pipeline so it can
+/// never describe rules the engine no longer has.
+#[tauri::command]
+async fn preset_brief(game: Option<String>) -> Result<String, String> {
+    let (program, base_args) = pipeline_invocation();
+    let mut full = base_args;
+    full.push("brief".to_string());
+    if let Some(g) = game {
+        if !g.is_empty() {
+            full.push(g);
+        }
+    }
+    let out = quiet_command(&program)
+        .args(&full)
+        .output()
+        .map_err(|e| e.to_string())?;
+    let text = String::from_utf8_lossy(&out.stdout).to_string();
+    if text.trim().is_empty() {
+        return Err(format!(
+            "could not build the brief: {}",
+            String::from_utf8_lossy(&out.stderr).chars().take(300).collect::<String>()
+        ));
+    }
+    Ok(text)
+}
+
+/// Caption styles, each with a still rendered by the real caption renderer.
+/// The stills land under $HOME/.terraclip/caption-previews, which is inside the
+/// asset-protocol scope, so the webview loads them with no extra grant.
+#[tauri::command]
+async fn caption_styles(force: Option<bool>) -> Result<Value, String> {
+    let (program, base_args) = pipeline_invocation();
+    let mut full = base_args;
+    full.push("captions".to_string());
+    if force.unwrap_or(false) {
+        full.push("--force".to_string());
+    }
+    let out = quiet_command(&program)
+        .args(&full)
+        .output()
+        .map_err(|e| e.to_string())?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let line = stdout.lines().rev().find(|l| l.trim_start().starts_with('{'));
+    line.and_then(|l| serde_json::from_str::<Value>(l).ok())
+        .ok_or_else(|| {
+            format!(
+                "could not render caption previews: {}",
+                String::from_utf8_lossy(&out.stderr).chars().take(400).collect::<String>()
+            )
+        })
+}
+
 /// Sync pipeline call that returns one JSON blob (edit context, visual
 /// suggestions). Long-running render-clip goes through run_edit_render
 /// instead so progress streams.
@@ -461,7 +545,7 @@ async fn edit_tool(app: AppHandle, args: Vec<String>) -> Result<Value, String> {
         Some(v) => {
             // The source video lives wherever the user keeps it — Downloads,
             // Desktop, an E:\ card — never under tauri.conf.json's
-            // assetProtocol scope ($HOME/.publikclip/**). All 7 job dirs on
+            // assetProtocol scope ($HOME/.terraclip/**). All 7 job dirs on
             // this machine point outside it, so protocol/asset.rs answered
             // every ClipEditor <video> request with 403: loadedmetadata never
             // fired, videoWidth stayed 0, and the whole crop/monitor rAF block
@@ -569,7 +653,7 @@ async fn ig_connect(app_id: String, app_secret: String) -> Result<String, String
     }
 }
 
-/// One-shot `publikclip ig <args...>` call returning the CLI's JSON line
+/// One-shot `terraclip ig <args...>` call returning the CLI's JSON line
 /// (sync / overview / link / unlink / reject — same contract as edit_tool).
 #[tauri::command]
 async fn ig_tool(args: Vec<String>) -> Result<Value, String> {
@@ -599,7 +683,7 @@ fn export_clip(path: String, title: Option<String>) -> Result<String, String> {
         return Err("clip file missing".into());
     }
     let downloads = dirs_home().join("Downloads");
-    let stem = title.unwrap_or_else(|| "publikclip".into());
+    let stem = title.unwrap_or_else(|| "terraclip".into());
     let safe: String = stem
         .chars()
         .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' { c } else { '_' })
@@ -638,6 +722,9 @@ fn main() {
             get_setup_state,
             mark_onboarded,
             check_ollama,
+            ollama_library,
+            caption_styles,
+            preset_brief,
             ig_status,
             ig_connect,
             ig_tool,
@@ -652,5 +739,5 @@ fn main() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running publikclip");
+        .expect("error while running terraclip");
 }

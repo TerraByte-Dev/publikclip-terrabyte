@@ -3,10 +3,10 @@ exactly right, it's the product."""
 
 import numpy as np
 
-from publikclip_pipeline.candidates import curve as curve_mod
-from publikclip_pipeline.candidates import windows as windows_mod
-from publikclip_pipeline.music.brief import mood_prior
-from publikclip_pipeline.scoring import rubric
+from terraclip_pipeline.candidates import curve as curve_mod
+from terraclip_pipeline.candidates import windows as windows_mod
+from terraclip_pipeline.music.brief import mood_prior
+from terraclip_pipeline.scoring import rubric
 
 
 def _t1(**overrides):

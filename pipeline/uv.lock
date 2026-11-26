@@ -1349,49 +1349,6 @@ wheels = [
 ]
 
 [[package]]
-name = "publikclip-pipeline"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "httpx" },
-    { name = "librosa" },
-    { name = "numba" },
-    { name = "onnxruntime" },
-    { name = "opencv-python-headless" },
-    { name = "python-speech-features" },
-    { name = "scenedetect" },
-    { name = "scikit-learn" },
-    { name = "scipy" },
-    { name = "speechbrain" },
-    { name = "torchlibrosa" },
-    { name = "whisperx" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "librosa", specifier = ">=0.10" },
-    { name = "numba", specifier = ">=0.60" },
-    { name = "onnxruntime", specifier = ">=1.20" },
-    { name = "opencv-python-headless", specifier = ">=4.10" },
-    { name = "python-speech-features", specifier = ">=0.6" },
-    { name = "scenedetect", specifier = ">=0.6.4" },
-    { name = "scikit-learn", specifier = ">=1.5" },
-    { name = "scipy", specifier = ">=1.14" },
-    { name = "speechbrain", specifier = ">=1.0,<1.1" },
-    { name = "torchlibrosa", specifier = ">=0.1.0" },
-    { name = "whisperx", specifier = "==3.8.6" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8" }]
-
-[[package]]
 name = "pyannote-audio"
 version = "4.0.7"
 source = { registry = "https://pypi.org/simple" }
@@ -1905,6 +1862,49 @@ sdist = { url = "https://files.pythonhosted.org/packages/83/d3/803453b36afefb7c2
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl", hash = "sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5", size = 6299353, upload-time = "2025-04-27T18:04:59.103Z" },
 ]
+
+[[package]]
+name = "terraclip-pipeline"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "httpx" },
+    { name = "librosa" },
+    { name = "numba" },
+    { name = "onnxruntime" },
+    { name = "opencv-python-headless" },
+    { name = "python-speech-features" },
+    { name = "scenedetect" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "speechbrain" },
+    { name = "torchlibrosa" },
+    { name = "whisperx" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "librosa", specifier = ">=0.10" },
+    { name = "numba", specifier = ">=0.60" },
+    { name = "onnxruntime", specifier = ">=1.20" },
+    { name = "opencv-python-headless", specifier = ">=4.10" },
+    { name = "python-speech-features", specifier = ">=0.6" },
+    { name = "scenedetect", specifier = ">=0.6.4" },
+    { name = "scikit-learn", specifier = ">=1.5" },
+    { name = "scipy", specifier = ">=1.14" },
+    { name = "speechbrain", specifier = ">=1.0,<1.1" },
+    { name = "torchlibrosa", specifier = ">=0.1.0" },
+    { name = "whisperx", specifier = "==3.8.6" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "threadpoolctl"

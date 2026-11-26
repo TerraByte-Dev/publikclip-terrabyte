@@ -39,6 +39,7 @@ interface EditContext {
   events: { type: string; start: number; end: number }[]
   auto_cuts: Cut[]
   run_caption_preset: string
+  run_camera_mode: string
 }
 
 const PRESETS = ['classic', 'beast', 'hormozi', 'minimal', 'karaoke-pop']
@@ -573,7 +574,12 @@ export default function ClipEditor({ jobId, clipIndex, onClose, onRendered }: Pr
         {CAMERAS.map((c) => (
           <button
             key={c}
-            className={`opt ${(edit.camera_mode ?? 'cut') === c ? 'opt-on' : ''}`}
+            /* ...?? ctx.run_camera_mode, never a hardcoded 'cut'. Every
+               gameplay run is 'locked', so this control showed "cut" as the
+               current state on a clip that was locked — and clicking the
+               highlighted button switched it, which re-directed the camera with
+               face detection over game footage and panned the clip. */
+            className={`opt ${(edit.camera_mode ?? ctx.run_camera_mode) === c ? 'opt-on' : ''}`}
             onClick={() => persist({ ...edit, camera_mode: c })}
           >
             {c}

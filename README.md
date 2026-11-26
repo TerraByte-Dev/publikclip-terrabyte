@@ -1,4 +1,4 @@
-# publikclip
+# terraclip
 
 > ### This is a modified fork
 >
@@ -12,7 +12,7 @@
 
 **Long video in. Scored vertical clips out. Everything runs on your machine.**
 
-publikclip is an open-source (AGPL-3.0) desktop app that takes a YouTube URL or a
+terraclip is an open-source (AGPL-3.0) desktop app that takes a YouTube URL or a
 horizontal video file and produces vertical 9:16 clips with:
 
 - **Smart camera** — active-speaker-tracked crop paths, smoothed motion, hard cuts
@@ -39,7 +39,7 @@ Working end to end: hour-long podcast in, rendered/captioned/scored 9:16 clips
 out, validated on real footage. The Instagram feedback loop ships in-app
 (sync, clip↔Reel matching, snapshot history, automatic score calibration).
 Builds are currently unsigned — install from source below, or follow the
-guided install at [publikhq.com/publikclip](https://publikhq.com/publikclip).
+guided install at [publikhq.com/terraclip](https://publikhq.com/terraclip).
 
 Runs on macOS (Apple silicon) and Windows 10/11 x64. The Windows path is
 validated on every push by the `windows` workflow: env resolve, full test
@@ -59,12 +59,12 @@ You need four tools: git, [Node](https://nodejs.org), [Rust](https://rustup.rs),
 and [uv](https://docs.astral.sh/uv/). Then:
 
 ```sh
-git clone https://github.com/Blueturboguy07/publikclip.git
-cd publikclip/app
+git clone https://github.com/Blueturboguy07/terraclip.git
+cd terraclip/app
 npm install
 npx tauri build --bundles app
-ditto src-tauri/target/release/bundle/macos/publikclip.app /Applications/publikclip.app
-open /Applications/publikclip.app
+ditto src-tauri/target/release/bundle/macos/terraclip.app /Applications/terraclip.app
+open /Applications/terraclip.app
 ```
 
 The app downloads its speech/audio models (~4–5 GB) on first run with a
@@ -80,8 +80,8 @@ with C++** build tools, [Node](https://nodejs.org), git, and
 Then, in PowerShell:
 
 ```powershell
-git clone https://github.com/Blueturboguy07/publikclip.git
-cd publikclip\app
+git clone https://github.com/Blueturboguy07/terraclip.git
+cd terraclip\app
 npm.cmd install
 node_modules\.bin\tauri.cmd build --bundles nsis
 # run the installer it produces:
@@ -96,7 +96,7 @@ bar, and a caption-capable static ffmpeg is fetched automatically.
 ```sh
 # pipeline
 cd pipeline && uv sync && uv run pytest
-uv run publikclip run "https://www.youtube.com/watch?v=..."
+uv run terraclip run "https://www.youtube.com/watch?v=..."
 
 # app
 cd app && npm install && npm run tauri dev
@@ -110,7 +110,7 @@ it can be reviewed on its own.
 **Bug fixes (proposed upstream)**
 
 - **Asset-protocol scope** — the clip editor's source monitor was dead for any
-  user whose media sits outside `~/.publikclip`, which is everyone who ingests a
+  user whose media sits outside `~/.terraclip`, which is everyone who ingests a
   local file. The webview answered every `<video>` request with 403, so the
   player never loaded while the timeline drew fine.
 - **Local Ollama scoring** — reasoning models (qwen3, gemma4, …) return an empty

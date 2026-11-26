@@ -1,6 +1,6 @@
 """Keep-range / remap math — the A/V-sync-critical core of per-clip editing."""
 
-from publikclip_pipeline.edits import timeline as tl
+from terraclip_pipeline.edits import timeline as tl
 
 
 def _words(spans):

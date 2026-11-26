@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Stage the Python pipeline + a uv binary into src-tauri/resources for
 // bundling. Packaged builds run: resources/bin/uv --directory
-// resources/pipeline run publikclip — the env bootstraps on first launch.
+// resources/pipeline run terraclip — the env bootstraps on first launch.
 //
 // Node instead of bash so the exact same script runs on macOS and Windows
 // (`beforeBuildCommand` executes under whatever shell the platform has).

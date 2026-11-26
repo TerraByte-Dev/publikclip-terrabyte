@@ -1,5 +1,14 @@
 import { invoke, convertFileSrc } from '@tauri-apps/api/core'
-import type { GamePreset, JobResults, JobSummary, LoopOverview, SetupState, SyncSummary } from './types'
+import type {
+  CaptionStyle,
+  GamePreset,
+  JobResults,
+  JobSummary,
+  LoopOverview,
+  OllamaLibrary,
+  SetupState,
+  SyncSummary
+} from './types'
 
 export const api = {
   runJob: (source: string, llm: string, captions: string, preset: string, game: string | null) =>
@@ -17,6 +26,15 @@ export const api = {
   setupState: () => invoke<SetupState>('get_setup_state'),
   markOnboarded: () => invoke<void>('mark_onboarded'),
   checkOllama: () => invoke<{ running: boolean; models: string[] }>('check_ollama'),
+  /** The local model library and which one would judge. `pin` sets the stored
+   *  choice; '' clears it and returns to the automatic pick. */
+  ollamaLibrary: (pin?: string, hardware?: boolean) =>
+    invoke<OllamaLibrary>('ollama_library', { pin, hardware }),
+  /** Caption styles, each with a still rendered by the real caption renderer. */
+  /** The paste-anywhere page explaining how to add a game. */
+  presetBrief: (game?: string) => invoke<string>('preset_brief', { game }),
+  captionStyles: (force?: boolean) =>
+    invoke<{ styles: CaptionStyle[]; dir: string }>('caption_styles', { force }),
   exportClip: (path: string, title?: string) =>
     invoke<string>('export_clip', { path, title }),
   igStatus: () => invoke<{ connected: boolean; username?: string }>('ig_status'),

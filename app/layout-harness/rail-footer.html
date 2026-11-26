@@ -1,0 +1,60 @@
+﻿<!doctype html>
+<meta charset="utf-8">
+<title>rail footer harness</title>
+<!--
+  The real stylesheet, the real DOM shape from Studio.tsx, and a job list long
+  enough to overflow. If .rail-foot stays inside the viewport after the list is
+  scrolled to its end, the footer is pinned. Nothing here is a mock: the CSS
+  file is the one that ships.
+-->
+<link rel="stylesheet" href="../src/styles.css">
+<div class="app-shell">
+  <div class="tb" style="height:30px;background:#111"></div>
+  <div class="app-body">
+    <div class="studio">
+      <aside class="rail">
+        <header class="rail-brand">
+          <span class="rail-logo">terraclip</span>
+          <span class="rail-sub">the clipper that shows its work</span>
+        </header>
+        <div class="rail-jobs">
+          <div class="jg-head">
+            <p class="rail-label" id="hdr">SESSIONS</p>
+            <span class="jg-count mono">60/60</span>
+          </div>
+          <div class="jg-filters" id="filters">
+            <button class="jg-filter is-on">all</button>
+            <button class="jg-filter">done</button>
+            <button class="jg-filter">partial</button>
+          </div>
+          <input class="jg-search mono" id="search" placeholder="find a sessionâ€¦">
+          <div class="jg-scroll" id="jobs"></div>
+        </div>
+        <footer class="rail-foot" id="foot">
+          <button class="btn-ghost">âŒ— game presets</button>
+          <button class="btn-ghost">â–¤ planner</button>
+          <button class="btn-ghost">â—Ž what landed</button>
+        </footer>
+      </aside>
+      <main class="stage-area" id="stage">
+        <h1 class="input-heading">FEED IT AN HOUR.</h1>
+      </main>
+    </div>
+  </div>
+</div>
+<script>
+  // A month of sessions, which is the state the bug shows up in.
+  const jobs = document.getElementById('jobs')
+  for (let i = 0; i < 60; i++) {
+    const d = document.createElement('div')
+    d.className = 'rail-job'
+    d.innerHTML = '<span class="rail-job-title">session ' + i + '</span>'
+    jobs.appendChild(d)
+  }
+  const stage = document.getElementById('stage')
+  for (let i = 0; i < 40; i++) {
+    const p = document.createElement('p')
+    p.textContent = 'stage filler line ' + i
+    stage.appendChild(p)
+  }
+</script>

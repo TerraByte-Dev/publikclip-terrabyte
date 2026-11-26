@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from publikclip_pipeline.captions import ass as ass_mod
-from publikclip_pipeline.render import ffmpeg_bin, loudness, renderer
+from terraclip_pipeline.captions import ass as ass_mod
+from terraclip_pipeline.render import ffmpeg_bin, loudness, renderer
 
 
 def test_crop_boxes_even_and_bounded():
@@ -84,7 +84,7 @@ def test_render_smoke(tmp_path):
     caption burn → verified 9:16 output."""
     src = tmp_path / "src.mp4"
     # Resolve like the product does — on a bare machine (Windows CI) the only
-    # ffmpeg is the fetched static one, reachable via PUBLIKCLIP_FFMPEG.
+    # ffmpeg is the fetched static one, reachable via TERRACLIP_FFMPEG.
     subprocess.run(
         [
             ffmpeg_bin.ffmpeg(), "-v", "error", "-y",
@@ -241,3 +241,54 @@ def test_measure_loudness_real_file_and_failures(tmp_path):
     assert renderer.measure_loudness(tmp_path / "nope.mp4") == {
         "lufs": None, "true_peak": None
     }
+
+
+def test_a_locked_camera_stays_locked_on_a_re_render(tmp_path, monkeypatch):
+    """THE SAME BUG, FIXED ONCE AND MISSED ONCE.
+
+    `camera/stage.py` shortcuts `locked` to a static centre crop and skips
+    detect+ASD, with the measurement written beside it: on gameplay the detector
+    finds only in-game character faces, and one delivered clip left the player
+    POV for a static NPC for 0.76 s with the HUD gone and a caption burned over
+    it.
+
+    The per-clip re-render path never got that shortcut. Tate changed CAPTIONS
+    on a clip whose stored bounds had drifted nine seconds from the run's, which
+    trips `_camera_needs_redirect`, which ran the full face + active-speaker
+    director over Overwatch footage — and the delivered clip "starts left and
+    then pans to the middle". `locked` only ever suppressed CUTS inside
+    build_trajectory; it never suppressed the pan.
+    """
+    from terraclip_pipeline import config
+    from terraclip_pipeline.edits import render_clip
+    from terraclip_pipeline.edits.timeline import ClipEdit
+
+    job = tmp_path / "job"
+    job.mkdir()
+    (job / "ingest.json").write_text(json.dumps({
+        "stage": "ingest", "schema_version": 1, "created_at": 0,
+        "data": {"media_path": "x.mp4", "probe": {"width": 1920, "height": 1080}},
+    }), encoding="utf-8")
+
+    # Bounds well away from the run's, so the redirect branch is taken.
+    edit = ClipEdit(start=606.82, end=620.22)
+    settings = config.Settings()
+    settings.camera.speaker_change = "locked"
+
+    def _boom(*a, **k):
+        raise AssertionError("a locked camera must never load a face detector")
+
+    monkeypatch.setattr(render_clip, "_camera_needs_redirect", lambda *a, **k: True)
+    import terraclip_pipeline.camera.detect as detect_mod
+    monkeypatch.setattr(detect_mod, "FaceDetector", _boom)
+
+    traj = render_clip._trajectory_for(
+        job, 9, edit, {"start": 597.8, "end": 620.999}, settings, lambda *a: None
+    )
+    xs = {round(f[0], 3) for f in traj["frames"]}
+    ws = {round(f[2], 3) for f in traj["frames"]}
+    assert len(xs) == 1, f"the crop moved horizontally across {len(xs)} positions"
+    assert len(ws) == 1, "the crop zoomed"
+    # ...and it is the centre of a 1920-wide source.
+    assert xs.pop() == (1920 - ws.copy().pop()) / 2
+    assert not traj["cuts"], "a locked camera does not cut"
