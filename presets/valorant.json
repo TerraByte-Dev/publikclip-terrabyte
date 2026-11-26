@@ -1,0 +1,196 @@
+{
+  "name": "Valorant",
+  "base": "gameplay",
+  "aspect": 1.7777777777777777,
+  "_note": "CHECKED — every box was drawn on real frames of this game: ten 1920x1080 frames captured through OBS game capture from a live match on 2026-09-24, each candidate box cropped out and looked at before it was written. The shipped placeholders were wrong in two places: 'ult points' sat over the HP number, and 'spike timer' included the debug overlay row. THE TELLS ARE STILL UNMEASURED — every curve_weight is 0.0 and no tell has been graded on a single frame. Boxes being right is the cheap half; run once, then `terraclip grade <job> --tell <tell>` before any weight goes up. NO `player` YET: the killfeed tells match the player's own name and there is none in this file, which is deliberate — a missing name is loud, a wrong one is silent. Set it to the name exactly as the elimination feed prints it. ASSUMES VALORANT'S STATS OVERLAYS ARE OFF. With 'Shooting Error' on, its white-bordered box lands inside the killfeed crop at y 0.202-0.259; shrink the killfeed h to 0.085 if you keep it on. The Client FPS / Network RTT row also crosses the delivered 1080x1920 column, so it burns into posted clips.",
+  "regions": [
+    {
+      "name": "gameplay",
+      "role": "main",
+      "x": 0.03,
+      "y": 0.09,
+      "w": 0.94,
+      "h": 0.81
+    },
+    {
+      "name": "killfeed",
+      "role": "margin_top",
+      "x": 0.7,
+      "y": 0.115,
+      "w": 0.29,
+      "h": 0.15,
+      "tell": "player_kill"
+    },
+    {
+      "name": "killfeed bakeoff",
+      "role": "watch",
+      "x": 0.7,
+      "y": 0.115,
+      "w": 0.29,
+      "h": 0.15,
+      "tell": "val_killfeed"
+    },
+    {
+      "name": "ult points",
+      "role": "margin_bottom",
+      "x": 0.548,
+      "y": 0.898,
+      "w": 0.09,
+      "h": 0.1,
+      "tell": "val_ult_points"
+    },
+    {
+      "name": "spike timer",
+      "role": "watch",
+      "x": 0.465,
+      "y": 0.02,
+      "w": 0.07,
+      "h": 0.095,
+      "tell": "val_spike"
+    }
+  ],
+  "tells": {
+    "val_killfeed": {
+      "label": "your eliminations (Valorant wording)",
+      "prompt": "This crop is the top-right corner of a VALORANT gameplay recording, where the game prints its ELIMINATION FEED. Each row is one elimination and reads LEFT to RIGHT: the name of the player who GOT the kill, then a small weapon or ability icon, then the name of the player who DIED. This game draws NO arrows and NO filled name plates — the names are coloured text on a dark translucent strip. Some rows carry small extra icons immediately after the killer's name; those are assists and belong to that same row, not to a second row.\n\nThe player we care about is called {player}.\n\nCount ONLY the rows where the name to the LEFT of the weapon or ability icon reads {player}. A row where {player} appears to the RIGHT of the icon does NOT count — that means they were killed, not that they got a kill. If {player} does not appear at all, answer 0. Count ROWS, not names. Match the printed characters; never judge a row by its colour or by whether it is highlighted.\n\nWhen the player is dead, Valorant shows a living teammate's view. The feed drawn there is the LIVE feed and should be counted exactly as normal — it is not a replay.\n\nSet readable=false and kills=0 only when something is covering this area instead of a feed: the TAB scoreboard (a two-team table of player names with columns of numbers), the large map overlay, the buy-phase shop panel, agent select, the round-end or match-end banner, or a black frame. Ordinary gameplay with an empty feed is READABLE with kills=0. Never invent rows.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "readable": {
+            "type": "boolean"
+          },
+          "kills": {
+            "type": "integer",
+            "enum": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          }
+        },
+        "required": [
+          "readable",
+          "kills"
+        ],
+        "additionalProperties": false
+      },
+      "score": {
+        "kind": "count",
+        "field": "kills",
+        "saturate": 2,
+        "floor": 1
+      },
+      "curve_weight": 0,
+      "interval": 8,
+      "upscale": 2,
+      "interest": "val_killfeed"
+    },
+    "val_ult_points": {
+      "label": "ultimate points",
+      "prompt": "You are reading ONE small crop from the bottom HUD of a VALORANT gameplay recording. The crop is supposed to contain the ULTIMATE slot: the agent's ultimate ability icon with its keybind letter (X), and beside or above it a short row of small ULTIMATE POINT markers — separate diamond or chevron shapes, never a continuous bar. Report only what is DRAWN in this image. Never infer from the action in the background, never guess from how the round seems to be going.\n\nSmall markers also appear above the OTHER ability icons in this same row. Those are ABILITY CHARGES — how many uses of that ability remain — and they are NOT ultimate points. Count only the markers belonging to the ULTIMATE icon, the one whose keybind letter is X.\n\nTHE SLOT HAS EXACTLY FOUR LOOKS:\n\n1. points — a row of ultimate point markers beside the X icon. Some are FILLED (bright, solid, opaque) and the rest are EMPTY (a dim outline only). DIFFERENT AGENTS HAVE DIFFERENT NUMBERS OF MARKERS — six, seven or eight — so never assume how many there should be and never answer a total. Count only the FILLED ones.\n\n2. ready — the ULTIMATE ICON ITSELF is highlighted or glowing and its X keybind is picked out, often with wording such as ULTIMATE or READY. DECIDE THIS BY THE ICON'S GLOW, NEVER BY THE ABSENCE OF FILLED MARKERS. An ordinary un-glowing icon with no filled markers next to it is points with zero filled, not ready. These are opposite ends of the scale and must not be merged.\n\n3. spectating — the player is DEAD and the game is showing a living teammate's view. Valorant draws the spectated player's name, and usually a prompt for switching between players, near this part of the screen; the ability row underneath belongs to THAT player, not to ours. If any observed-player name or switch prompt is drawn in this crop, answer spectating, whatever else the ability row shows.\n\n4. no_slot — none of the above: a menu, the buy-phase shop panel covering this area, agent select, the scoreboard, the large map overlay, the end-of-round or end-of-game screen, a black frame, or plain scenery with no ability row present at all.\n\nDO NOT over-report no_slot. Muzzle flash, smoke, ability effects and bright scenery cross the bottom of the screen constantly and the slot still reads through them. Answer no_slot only when the ability row itself is absent, never merely because something is drawn over it.\n\nAnswer in this order:\n- slot_state: which of the four above is drawn.\n- ult_ready: true ONLY when slot_state is ready — the icon is glowing. False for every other frame, including one where no markers are filled.\n- ult_points: when slot_state is points, how many markers are FILLED, 0 if none are. When slot_state is ready, answer 8 — that is the fixed code for READY, not a count, and it is correct for every agent whatever their pool. When slot_state is spectating or no_slot, answer -1. This FOLLOWS from slot_state; do not judge it separately, and never answer -1 on a frame where you can see our own ability row.\n- readable: true when slot_state is points or ready; false when slot_state is spectating or no_slot.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "slot_state": {
+            "type": "string",
+            "enum": [
+              "points",
+              "ready",
+              "spectating",
+              "no_slot"
+            ]
+          },
+          "ult_ready": {
+            "type": "boolean"
+          },
+          "ult_points": {
+            "type": "integer",
+            "enum": [
+              -1,
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ]
+          },
+          "readable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "slot_state",
+          "ult_ready",
+          "ult_points",
+          "readable"
+        ],
+        "additionalProperties": false
+      },
+      "score": {
+        "kind": "count",
+        "field": "ult_points",
+        "saturate": 8,
+        "floor": 0
+      },
+      "curve_weight": 0,
+      "interval": 8,
+      "upscale": 2,
+      "interest": "val_ult_points"
+    },
+    "val_spike": {
+      "label": "spike",
+      "prompt": "This crop is the very top centre of a VALORANT screen. In an ordinary round it shows the ROUND TIMER as digits, for example 1:24 or 0:37. Once the spike has been PLANTED those digits are replaced by the SPIKE: a red/orange spike indicator with a countdown that DEPLETES as it runs down toward detonation.\n\nTwo large numbers may also appear to the LEFT and RIGHT of centre. That is the ROUND SCORE — how many rounds each team has won. It is drawn in every phase of every round, including after the plant, and it is NOT the round timer. Judge ONLY the element in the exact centre; if the only digits you can see are those flanking numbers, the centre element is not a round clock.\n\nReport only what is DRAWN. Never work out from the action whether the spike is planted, and never estimate a time from how the round feels.\n\nAnswer in this order:\n1. timer_state — ROUND_CLOCK when a timer is drawn in the centre and no spike countdown is present; SPIKE_PLANTED when the spike indicator and its depleting countdown are drawn in the centre in place of the timer; NONE when neither is drawn — a menu, the buy-phase shop, agent select, the scoreboard, the large map overlay, the end-of-round or end-of-game screen, or a black frame.\n2. spike_left — how much of the spike countdown is still left, judged ONLY by WHERE the edge of the depleting bar or ring sits, in quarters: 3 when the countdown is between full and three quarters remaining; 2 when between three quarters and half; 1 when between half and a quarter; 0 when a quarter or less remains. Answer 4 when timer_state is ROUND_CLOCK, because nothing is planted. Answer 5 when timer_state is NONE. Judge the POSITION of the edge and nothing else — not the colour, not the beeping, not the action on screen.\n3. readable — true when timer_state is ROUND_CLOCK or SPIKE_PLANTED, false when timer_state is NONE.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "timer_state": {
+            "type": "string",
+            "enum": [
+              "ROUND_CLOCK",
+              "SPIKE_PLANTED",
+              "NONE"
+            ]
+          },
+          "spike_left": {
+            "type": "integer",
+            "enum": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "readable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "timer_state",
+          "spike_left",
+          "readable"
+        ],
+        "additionalProperties": false
+      },
+      "score": {
+        "kind": "gap",
+        "field": "spike_left",
+        "full": 4
+      },
+      "curve_weight": 0,
+      "interval": 12,
+      "upscale": 2,
+      "interest": "val_spike"
+    }
+  },
+  "watch_interval": 4
+}

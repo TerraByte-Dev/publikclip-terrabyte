@@ -1,0 +1,285 @@
+{
+  "name": "Counter-Strike 2",
+  "base": "gameplay",
+  "aspect": 1.7777777777777777,
+  "_note": "REGIONS ARE PLACEHOLDERS, measured on zero frames of this game. Draw them on your own screenshot in the app before the first run. Every tell ships at curve_weight 0.0 \u2014 run once, then `terraclip grade <job> --tell <tell>` to earn it a weight.",
+  "regions": [
+    {
+      "name": "killfeed",
+      "role": "margin_top",
+      "x": 0.525,
+      "y": 0.06,
+      "w": 0.47,
+      "h": 0.16,
+      "tell": "cs2_player_kill"
+    },
+    {
+      "name": "vitals_strip",
+      "role": "watch",
+      "x": 0,
+      "y": 0.86,
+      "w": 0.72,
+      "h": 0.14,
+      "tell": "cs2_vitals"
+    },
+    {
+      "name": "clock",
+      "role": "watch",
+      "x": 0.48,
+      "y": 0.004,
+      "w": 0.04,
+      "h": 0.06,
+      "tell": "cs2_bomb"
+    },
+    {
+      "name": "health_band",
+      "role": "margin_bottom",
+      "x": 0.015,
+      "y": 0.87,
+      "w": 0.24,
+      "h": 0.105
+    },
+    {
+      "name": "gameplay",
+      "role": "main",
+      "x": 0.02,
+      "y": 0.08,
+      "w": 0.96,
+      "h": 0.84
+    }
+  ],
+  "tells": {
+    "cs2_player_kill": {
+      "label": "your eliminations",
+      "prompt": "This crop shows a Counter-Strike 2 elimination feed: rows of a player name, a weapon icon, then another player name. The player we care about is called {player}.\nCount ONLY the rows where {player} is the name IMMEDIATELY to the LEFT of the weapon icon. Rows where {player} appears to the RIGHT of the weapon icon do not count: that means they were killed, not that they got a kill. If {player} does not appear at all, answer 0.\nASSISTS. Some rows show TWO names joined by a '+' before the weapon icon, like 'A + B [icon] C'. Both of those names are on the left of the icon, but only ONE of them got the kill: the SECOND one, the name immediately touching the icon. The FIRST name is an assist and does NOT count. So if {player} is the first of the two, that row counts 0; if {player} is the second, it counts 1.\nAN EMPTY FEED IS NORMAL AND IT IS READABLE. Most of a Counter-Strike round has nothing in this feed at all - freeze time, the walk out of spawn, holding an angle. That is ordinary gameplay: answer readable=true with kills=0. It is not a failure and it is not a missing HUD.\nSet readable=false ONLY when something is COVERING this area or there is no game screen: a scoreboard, a menu, the map or overview screen, a loading screen, or a black frame.\nHOLDING TAB opens a SCOREBOARD over this corner: a two-team table of player names with columns of numbers (kills, deaths, ADR). That is NOT an elimination feed - it is a stats table, every player is listed whether or not anything just happened, and counting its rows would invent kills that never occurred. Set readable=false.\nWhile you are dead you watch a teammate, and this feed keeps running LIVE - it is not a replay and its rows are real. Read it normally; your own name simply will not be on the left of anything.\nNever invent rows.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "readable": {
+            "type": "boolean"
+          },
+          "kills": {
+            "type": "integer",
+            "enum": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          }
+        },
+        "required": [
+          "readable",
+          "kills"
+        ],
+        "additionalProperties": false
+      },
+      "score": {
+        "kind": "count",
+        "field": "kills",
+        "saturate": 2,
+        "floor": 1
+      },
+      "curve_weight": 0.0,
+      "upscale": 2,
+      "interest": "cs2_player_kill"
+    },
+    "cs2_vitals": {
+      "label": "your health",
+      "prompt": "This crop is the bottom strip of a Counter-Strike 2 gameplay recording. At the far LEFT it contains the HEALTH panel: a large white number from 0 to 100 beside a small cross icon, and beside that an ARMOUR number with a shield icon. Across the MIDDLE of the strip the game prints what it shows you when you are WATCHING another player after your own death - that player's NAME, and their weapons.\n\nRead the HEALTH number only - the one beside the CROSS icon, on the LEFT. Do not read the armour number, do not read ammunition, do not read any number in the middle of the strip. Report the digits that are DRAWN. Never estimate health from a bar, from blood on the screen, or from how the fight looks.\n\nWHOSE HEALTH IS THIS? After you die, Counter-Strike 2 keeps drawing this same panel in the same place with the same styling - but the health in it belongs to the TEAMMATE you are watching, not to {player}. Reporting that as {player}'s own health is the one mistake that would ruin this tell. The panel looks IDENTICAL either way, so do not judge it by appearance. The only thing that decides the answer is whether a player NAME is printed in this strip:\n- NO player name printed anywhere in the strip, or a printed name that reads {player} -> this is {player}'s own live HUD.\n- a player name printed that is NOT {player} -> you are watching somebody else.\n\nCounter-Strike 2 has NO health regeneration. A player at 27 stays at 27 for the rest of the round, so any number below 100 is a record of damage already taken and is a real reading, not a passing state.\n\nAnswer in this order:\n1. panel - which ONE of these: OWN when no name is printed or the printed name reads {player}; SPECTATED when a player name is printed and it is not {player}; ABSENT when no health panel is drawn at all (main menu, the map or overview screen, the scoreboard, the buy menu, a loading screen, a black frame).\n2. hp - the health digits printed on an OWN panel, 0 to 100. Use 100 whenever panel is not OWN. This follows from the answer above; do not judge it separately and never invent a number for a panel you are not reading.\n3. readable - true only when panel is OWN.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "panel": {
+            "type": "string",
+            "enum": [
+              "OWN",
+              "SPECTATED",
+              "ABSENT"
+            ]
+          },
+          "hp": {
+            "type": "integer",
+            "enum": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23,
+              24,
+              25,
+              26,
+              27,
+              28,
+              29,
+              30,
+              31,
+              32,
+              33,
+              34,
+              35,
+              36,
+              37,
+              38,
+              39,
+              40,
+              41,
+              42,
+              43,
+              44,
+              45,
+              46,
+              47,
+              48,
+              49,
+              50,
+              51,
+              52,
+              53,
+              54,
+              55,
+              56,
+              57,
+              58,
+              59,
+              60,
+              61,
+              62,
+              63,
+              64,
+              65,
+              66,
+              67,
+              68,
+              69,
+              70,
+              71,
+              72,
+              73,
+              74,
+              75,
+              76,
+              77,
+              78,
+              79,
+              80,
+              81,
+              82,
+              83,
+              84,
+              85,
+              86,
+              87,
+              88,
+              89,
+              90,
+              91,
+              92,
+              93,
+              94,
+              95,
+              96,
+              97,
+              98,
+              99,
+              100
+            ]
+          },
+          "readable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "panel",
+          "hp",
+          "readable"
+        ],
+        "additionalProperties": false
+      },
+      "score": {
+        "kind": "gap",
+        "field": "hp",
+        "full": 100,
+        "floor": 0.15
+      },
+      "events": {
+        "kind": "delta",
+        "direction": "down",
+        "field": "hp",
+        "saturate": 60,
+        "lead": 20,
+        "trail": 6,
+        "min_delta": 40
+      },
+      "curve_weight": 0,
+      "interval": 10,
+      "upscale": 1,
+      "interest": "cs2_vitals"
+    },
+    "cs2_bomb": {
+      "label": "bomb planted",
+      "prompt": "This crop is the top-centre of a Counter-Strike 2 screen, where the game draws the round clock. Report only what is DRAWN. Read ONLY the largest, CENTRE element: small numbers at the left or right edge of this crop are the two teams' round scores and must be ignored.\n\nTHE CENTRE ELEMENT HAS TWO LOOKS:\n1. round_clock - the ordinary match timer, written as minutes, a COLON, then two digits: 1:55, 0:47, 0:09.\n2. bomb_planted - once the C4 is planted the timer is REPLACED by a BOMB icon, usually red or orange. Counter-Strike 2 prints NO countdown number for the bomb: the icon alone is the answer, and there is no minutes:seconds timer beside it. If you can see a colon-separated timer, this is NOT it.\n3. absent - neither is drawn: the main menu, the map or overview screen, a scoreboard covering the bar, a loading screen, a black frame.\n\nAnswer in this order:\n1. clock - which ONE of the three above is drawn.\n2. planted - 1 when clock is bomb_planted, 0 for everything else. This follows from the answer above; do not judge it separately.\n3. readable - true when clock is round_clock or bomb_planted, false when absent. Never infer the state from the sound, from where players are moving, or from how tense the round looks \u2014 report only what is drawn in this crop.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "clock": {
+            "type": "string",
+            "enum": [
+              "round_clock",
+              "bomb_planted",
+              "absent"
+            ]
+          },
+          "planted": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "readable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "clock",
+          "planted",
+          "readable"
+        ],
+        "additionalProperties": false
+      },
+      "score": {
+        "kind": "count",
+        "field": "planted",
+        "saturate": 1
+      },
+      "curve_weight": 0,
+      "interval": 20,
+      "upscale": 2,
+      "interest": "cs2_bomb"
+    }
+  },
+  "watch_interval": 4
+}

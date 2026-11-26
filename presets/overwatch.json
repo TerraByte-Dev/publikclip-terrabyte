@@ -1,0 +1,63 @@
+{
+  "name": "Overwatch",
+  "_note": "These boxes were DRAWN AND CHECKED on real 1920x1080 Overwatch footage, not guessed \u2014 this is the preset every measurement in the project was taken against. They still assume the default HUD at 100% scale and 16:9; a different HUD scale moves all of them. The killfeed box needs YOUR in-game name to score anything: install with --player.",
+  "aspect": 1.7777777777777777,
+  "base": "gameplay",
+  "friendly": "blue",
+  "regions": [
+    {
+      "h": 0.2,
+      "name": "killfeed",
+      "role": "margin_top",
+      "tell": "player_kill",
+      "w": 0.398,
+      "x": 0.6,
+      "y": 0.06
+    },
+    {
+      "h": 0.038,
+      "name": "alive",
+      "role": "watch",
+      "tell": "team_counter",
+      "w": 0.088,
+      "x": 0.903,
+      "y": 0.024
+    },
+    {
+      "h": 0.156,
+      "name": "HeroHP",
+      "role": "margin_bottom",
+      "tell": "on_fire",
+      "w": 0.219,
+      "x": 0.012,
+      "y": 0.8
+    },
+    {
+      "h": 0.81,
+      "name": "gameplay",
+      "role": "main",
+      "w": 0.963,
+      "x": 0.03,
+      "y": 0.132
+    },
+    {
+      "h": 0.11905732217781471,
+      "name": "ultimate",
+      "role": "watch",
+      "tell": "ult_charge",
+      "w": 0.06520940192500663,
+      "x": 0.4695076928089736,
+      "y": 0.7981733377464326
+    },
+    {
+      "h": 0.15330668883170673,
+      "name": "activity feed",
+      "role": "watch",
+      "w": 0.1910359943718502,
+      "x": 0.40797206000650266,
+      "y": 0.6399738822498842,
+      "tell": "activity_feed"
+    }
+  ],
+  "watch_interval": 4
+}

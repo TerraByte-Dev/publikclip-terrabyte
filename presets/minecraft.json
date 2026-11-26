@@ -1,0 +1,105 @@
+{
+  "name": "Minecraft",
+  "base": "gameplay",
+  "aspect": 1.7777777777777777,
+  "_note": "The health box was DRAWN AND CHECKED against real footage (youtube wFiD1IRNvW8, 1920x1080) rather than guessed \u2014 but a HUD scale other than default, or a mod that moves the hotbar, will still shift it. Redraw on your own screenshot if the first grade looks wrong. The health band is why: a centred 9:16 crop of 1920x1080 keeps x 0.342-0.658, and the heart row starts at 0.302 \u2014 so the leftmost ~2 hearts fall outside the delivered clip. Hearts empty right-to-left, which means the crop hides health exactly when health is the story. The band puts the whole row back, 2.8x larger.",
+  "watch_interval": 8.0,
+  "weights": {
+    "vision": 0.12,
+    "dynamics": 0.28,
+    "events": 0.24,
+    "arousal": 0.12,
+    "turns": 0.1,
+    "scenes": 0.09,
+    "lexical": 0.03,
+    "heatmap": 0.02
+  },
+  "regions": [
+    {
+      "name": "gameplay",
+      "role": "main",
+      "x": 0.0,
+      "y": 0.0,
+      "w": 1.0,
+      "h": 1.0
+    },
+    {
+      "name": "hearts",
+      "role": "watch",
+      "tell": "mc_hearts",
+      "x": 0.302,
+      "y": 0.852,
+      "w": 0.175,
+      "h": 0.048
+    },
+    {
+      "name": "health band",
+      "role": "margin_bottom",
+      "x": 0.292,
+      "y": 0.845,
+      "w": 0.195,
+      "h": 0.055
+    }
+  ],
+  "tells": {
+    "mc_hearts": {
+      "label": "health",
+      "interest": "damage",
+      "prompt": "This crop is the health row from a Minecraft HUD: a line of up to ten heart icons, drawn as chunky pixel art.\nA heart with any RED in it is health the player still has. A heart drawn dark grey or black is health they have lost. A heart can be half red and half dark; that one still counts as showing red.\nCount the hearts that show ANY red. Ten is full health, zero is none left.\nBRIGHTNESS DECIDES WHETHER YOU ANSWER AT ALL. During normal play the red is vivid and the icons are sharp. When a menu, an inventory or a pause screen is open, the whole game dims behind it and the hearts go dark maroon and murky \u2014 they are still faintly countable, and counting them is wrong, because the player is in a menu and not in danger.\nAnswer in this order:\n1. state - BRIGHT when the hearts are vivid red on live gameplay. DIMMED when the picture is darkened behind a menu or pause screen. HIDDEN when no heart row is visible at all, or a panel covers it.\n2. hearts - how many hearts show any red, counted only when state is BRIGHT. Use 0 when state is not BRIGHT.\n3. readable - true only when state is BRIGHT. This follows from the answer above; do not judge it separately.\nReport only what is DRAWN. Never infer health from the scene, from how dangerous it looks, or from anything outside the heart row.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "BRIGHT",
+              "DIMMED",
+              "HIDDEN"
+            ]
+          },
+          "hearts": {
+            "type": "integer",
+            "enum": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10
+            ]
+          },
+          "readable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "state",
+          "hearts",
+          "readable"
+        ]
+      },
+      "score": {
+        "kind": "gap",
+        "field": "hearts",
+        "full": 10
+      },
+      "events": {
+        "kind": "delta",
+        "direction": "down",
+        "field": "hearts",
+        "saturate": 4,
+        "lead": 5,
+        "trail": 10,
+        "min_delta": 2
+      },
+      "measured": "16/18 exact on 18 hand-labelled frames from wFiD1IRNvW8 (2026-09-09)",
+      "curve_weight": 0.35,
+      "upscale": 2
+    }
+  }
+}

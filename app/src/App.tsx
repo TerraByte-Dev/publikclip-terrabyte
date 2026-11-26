@@ -6,6 +6,9 @@ import Onboarding from './components/Onboarding'
 import Studio from './components/Studio'
 import Review from './components/Review'
 import Loop from './components/Loop'
+import TitleBar from './components/TitleBar'
+import SettingsModal from './components/SettingsModal'
+import Planner, { PlannerBanner } from './components/Planner'
 import './styles.css'
 
 type View = 'boot' | 'onboarding' | 'studio' | 'review' | 'loop'
@@ -18,6 +21,8 @@ export default function App() {
   const [results, setResults] = useState<JobResults | null>(null)
   const [stages, setStages] = useState<Record<string, { fraction: number; message: string }>>({})
   const [running, setRunning] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [showPlanner, setShowPlanner] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
   const unlistenRef = useRef<(() => void) | null>(null)
   const activeJobRef = useRef<string | null>(null)
@@ -139,6 +144,22 @@ export default function App() {
     [refreshJobs]
   )
 
+  // ONE shell for every view. Settings used to be a button inside Studio,
+  // so from a Review or the Loop screen it was simply unreachable.
+  const shell = (inner: React.ReactNode) => (
+    <div className="app-shell crt-scanlines crt-vignette">
+      <TitleBar
+        busy={running ? (Object.entries(stages).find(([, v]) => v.fraction < 1)?.[0] ?? 'working') : null}
+        onSettings={() => setShowSettings(true)}
+        onPlanner={() => setShowPlanner(true)}
+      />
+      <PlannerBanner onOpen={() => setShowPlanner(true)} />
+      <div className="app-body">{inner}</div>
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showPlanner && <Planner onClose={() => setShowPlanner(false)} />}
+    </div>
+  )
+
   if (view === 'boot') return <div className="boot" />
 
   if (view === 'onboarding' && setup) {
@@ -154,11 +175,11 @@ export default function App() {
   }
 
   if (view === 'loop') {
-    return <Loop onBack={() => setView('studio')} />
+    return shell(<Loop onBack={() => setView('studio')} />)
   }
 
   if (view === 'review' && results) {
-    return (
+    return shell(
       <Review
         results={results}
         onBack={() => {
@@ -177,7 +198,7 @@ export default function App() {
     )
   }
 
-  return (
+  return shell(
     <Studio
       jobs={jobs}
       running={running}
@@ -185,6 +206,7 @@ export default function App() {
       error={runError}
       onRun={startRun}
       onOpenLoop={() => setView('loop')}
+      onPlanner={() => setShowPlanner(true)}
       onOpenJob={openJob}
       onDelete={deleteJob}
       onResume={(id, llm) => {
@@ -195,5 +217,5 @@ export default function App() {
         api.resumeJob(id, llm)
       }}
     />
-  )
+    )
 }

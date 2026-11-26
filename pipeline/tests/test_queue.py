@@ -8,13 +8,13 @@ import json
 
 import pytest
 
-from publikclip_pipeline import config
-from publikclip_pipeline.jobs import queue
+from terraclip_pipeline import config
+from terraclip_pipeline.jobs import queue
 
 
 @pytest.fixture(autouse=True)
 def isolated_home(tmp_path, monkeypatch):
-    monkeypatch.setenv("PUBLIKCLIP_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("TERRACLIP_HOME", str(tmp_path / "home"))
     yield
 
 

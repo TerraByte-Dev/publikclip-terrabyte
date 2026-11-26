@@ -1,25 +1,42 @@
 import { useEffect, useState } from 'react'
 import {
   THEMES, applyTheme, getThemeId, getGrainOff, getReduceMotion,
-  setGrainOff, setReduceMotion, THEME_EVENT, DISPLAY_EVENT
+  setGrainOff, setReduceMotion, getCrtOff, setCrtOff, THEME_EVENT, DISPLAY_EVENT
 } from '../theme'
+import { Section, SettingRow, Toggle, KeyButton } from './settings/primitives'
+import KeysPane from './settings/KeysPane'
 
 /**
- * Appearance. Renderer-only — theme + display toggles are localStorage and DOM
- * classes, no IPC, no Rust. The gemini/pexels keys stay in KeyModal on
- * purpose: those are secrets going through Tauri commands that can fail at the
- * filesystem, a different kind of setting entirely, and "◈ gemini key" is the
- * label an existing user already reaches for.
+ * The TerraByte settings surface: a fixed two-pane dialog with a nav rail on
+ * the left, ported in shape from TerraPlayer's Settings so it is the same
+ * object in both apps.
+ *
+ * It also FIXES two things rather than reproducing them:
+ *   - Escape closes it. TerraPlayer's dialogs have the handler; TerraClip's
+ *     old settings modal had none, so the only way out was a mouse.
+ *   - the API keys live here now. They used to be a separate "◈ gemini key"
+ *     modal reachable only from Studio, which meant the app had two settings
+ *     surfaces and neither of them was reachable from a Review.
  */
+
+type Pane = 'appearance' | 'backends' | 'about'
+
+const PANES: { id: Pane; label: string; blurb: string }[] = [
+  { id: 'appearance', label: 'APPEARANCE', blurb: 'theme, grain, motion' },
+  { id: 'backends', label: 'BACKENDS', blurb: 'API keys' },
+  { id: 'about', label: 'ABOUT', blurb: 'version, paths' },
+]
 
 interface Props {
   onClose: () => void
 }
 
 export default function SettingsModal({ onClose }: Props) {
+  const [pane, setPane] = useState<Pane>('appearance')
   const [themeId, setThemeId] = useState(getThemeId)
   const [grainOff, setGrain] = useState(getGrainOff)
   const [reduced, setReduced] = useState(getReduceMotion)
+  const [crtOff, setCrt] = useState(getCrtOff)
 
   // theme.ts broadcasts on every change. Re-READ rather than mirror, so this
   // panel can never disagree with what is actually on <html>.
@@ -28,6 +45,7 @@ export default function SettingsModal({ onClose }: Props) {
       setThemeId(getThemeId())
       setGrain(getGrainOff())
       setReduced(getReduceMotion())
+      setCrt(getCrtOff())
     }
     window.addEventListener(THEME_EVENT, sync)
     window.addEventListener(DISPLAY_EVENT, sync)
@@ -37,71 +55,118 @@ export default function SettingsModal({ onClose }: Props) {
     }
   }, [])
 
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', esc)
+    return () => document.removeEventListener('keydown', esc)
+  }, [onClose])
+
   return (
-    <div className="modal-scrim" onClick={onClose}>
-      <div className="modal modal-settings" onClick={(e) => e.stopPropagation()}>
-        <header className="modal-head">
-          <p className="audit-kicker">THE BENCH</p>
-          <button className="btn-ghost" onClick={onClose}>close ✕</button>
-        </header>
-        <p className="ig-intro">
-          Recolours the signal — meters, actives, glows, focus. The bay stays
-          charcoal, the type never changes, and <em>red still means destroyed</em>{' '}
-          in every theme. Applies instantly, remembered across restarts.
-        </p>
+    <div
+      className="modal-scrim st-scrim"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div className="st-dialog" role="dialog" aria-modal="true" aria-label="Settings">
+        <nav className="st-rail">
+          <div className="st-rail-brand">
+            <span className="st-rail-dot" aria-hidden />
+            <span className="mono">SETTINGS</span>
+          </div>
+          {PANES.map((p) => (
+            <button
+              key={p.id}
+              className={`st-rail-item ${pane === p.id ? 'is-on' : ''}`}
+              onClick={() => setPane(p.id)}
+              aria-current={pane === p.id}
+            >
+              <span className="st-rail-label mono">{p.label}</span>
+              <span className="st-rail-blurb">{p.blurb}</span>
+            </button>
+          ))}
+          <div className="st-rail-foot">
+            <KeyButton onClick={onClose}>close</KeyButton>
+          </div>
+        </nav>
 
-        <p className="audit-label" style={{ marginTop: 0 }}>THEME</p>
-        <div className="theme-grid">
-          {THEMES.map((t) => {
-            const on = themeId === t.id
-            return (
-              <button
-                key={t.id}
-                className={`theme-card ${on ? 'theme-on' : ''}`}
-                onClick={() => applyTheme(t.id)}
-                aria-pressed={on}
+        <div className="st-body">
+          {pane === 'appearance' && (
+            <>
+              <Section
+                title="Theme"
+                description="Recolours the signal — meters, actives, glows, focus. The bay stays charcoal, the type never changes, and red still means destroyed in every theme."
               >
-                {/* the app's own idiom — a signal dot and a VU bar — on the bay
-                    charcoal that never recolours, so the card previews exactly
-                    what will and will not change */}
-                <span className="theme-swatch">
-                  <span
-                    className="theme-dot"
-                    style={{ background: t.swatch.accent, boxShadow: `0 0 8px ${t.swatch.accent}` }}
-                  />
-                  <span className="theme-bar">
-                    <span style={{ background: `linear-gradient(90deg, ${t.swatch.deep}, ${t.swatch.accent})` }} />
-                  </span>
-                </span>
-                <span className="theme-name mono">{t.name}</span>
-                <span className="theme-blurb">{t.blurb}</span>
-              </button>
-            )
-          })}
-        </div>
+                <div className="theme-grid">
+                  {THEMES.map((t) => {
+                    const on = themeId === t.id
+                    return (
+                      <button
+                        key={t.id}
+                        className={`theme-card ${on ? 'theme-on' : ''}`}
+                        onClick={() => applyTheme(t.id)}
+                        aria-pressed={on}
+                      >
+                        <span className="theme-swatch">
+                          <span
+                            className="theme-dot"
+                            style={{ background: t.swatch.accent, boxShadow: `0 0 8px ${t.swatch.accent}` }}
+                          />
+                          <span className="theme-bar">
+                            <span style={{ background: `linear-gradient(90deg, ${t.swatch.deep}, ${t.swatch.accent})` }} />
+                          </span>
+                        </span>
+                        <span className="theme-name mono">{t.name}</span>
+                        <span className="theme-blurb">{t.blurb}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </Section>
 
-        <p className="audit-label">DISPLAY</p>
-        <div className="set-rows">
-          <div className="set-row">
-            <div>
-              <p className="set-label">Film grain</p>
-              <p className="set-help">{grainOff ? 'off — flat, clean monitor' : 'on — the quiet 5% overlay'}</p>
-            </div>
-            <button className={`opt ${grainOff ? '' : 'opt-on'}`} onClick={() => setGrainOff(!grainOff)}>
-              {grainOff ? 'off' : 'on'}
-            </button>
-          </div>
-          <div className="set-row">
-            <div>
-              <p className="set-label">Reduce motion</p>
-              <p className="set-help">
-                {reduced ? 'grain, sweeps and entrances held still' : 'grain drifts, meters sweep, panels rise'}
-              </p>
-            </div>
-            <button className={`opt ${reduced ? 'opt-on' : ''}`} onClick={() => setReduceMotion(!reduced)}>
-              {reduced ? 'on' : 'off'}
-            </button>
-          </div>
+              <Section title="Display">
+                <SettingRow
+                  label="CRT"
+                  help={crtOff ? 'off — flat panel' : 'on — scanlines and vignette'}
+                  control={<Toggle on={!crtOff} label="CRT" onChange={(v) => setCrtOff(!v)} />}
+                />
+                <SettingRow
+                  label="Film grain"
+                  help={grainOff ? 'off — flat, clean monitor' : 'on — the quiet 5% overlay'}
+                  control={
+                    <Toggle on={!grainOff} label="Film grain" onChange={(v) => setGrainOff(!v)} />
+                  }
+                />
+                <SettingRow
+                  label="Reduce motion"
+                  help={
+                    reduced
+                      ? 'grain, sweeps and entrances held still'
+                      : 'grain drifts, meters sweep, panels rise'
+                  }
+                  control={<Toggle on={reduced} label="Reduce motion" onChange={setReduceMotion} />}
+                />
+              </Section>
+            </>
+          )}
+
+          {pane === 'backends' && <KeysPane />}
+
+          {pane === 'about' && (
+            <Section
+              title="TerraClip"
+              description="Long video in, scored vertical clips out. Everything runs on your machine."
+            >
+              <SettingRow label="Jobs, models and presets" help="~\\.terraclip\\" control={null} />
+              <SettingRow
+                label="Local model"
+                help="Ollama — no key, no cloud, no spend"
+                control={null}
+              />
+            </Section>
+          )}
         </div>
       </div>
     </div>

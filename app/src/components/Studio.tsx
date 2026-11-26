@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
 import { confirm } from '@tauri-apps/plugin-dialog'
-import type { GamePreset, JobSummary } from '../types'
+import type { CaptionStyle, GamePreset, JobSummary } from '../types'
+import JobGroups from './JobGroups'
 import { api } from '../api'
-import KeyModal from './KeyModal'
-import SettingsModal from './SettingsModal'
 import PresetModal from './PresetModal'
+import LocalBrain from './LocalBrain'
 
+// Any stage name the Python side emits that is missing from this array lands
+// in App.tsx's `stages` state and is then never drawn — the render loop
+// iterates STAGE_ORDER, not Object.keys(stages). A new pipeline stage without
+// a line here is a stage that appears to hang.
 const STAGE_ORDER = [
-  'ingest', 'asr', 'diarize', 'events', 'candidates', 'score', 'camera', 'render'
+  'ingest', 'asr', 'diarize', 'events', 'watch', 'candidates', 'score', 'camera', 'render'
 ]
 
 const STAGE_LABELS: Record<string, string> = {
@@ -15,13 +19,17 @@ const STAGE_LABELS: Record<string, string> = {
   asr: 'TRANSCRIBE',
   diarize: 'SPEAKERS',
   events: 'LISTEN',
+  watch: 'WATCH',
   candidates: 'SCAN',
   score: 'JUDGE',
   camera: 'DIRECT',
   render: 'RENDER'
 }
 
-const CAPTION_PRESETS = ['classic', 'beast', 'hormozi', 'minimal', 'karaoke-pop']
+// Styles come from the pipeline, each with a still rendered by the real
+// caption renderer. They used to be five hardcoded strings — 'classic',
+// 'beast', 'hormozi', 'minimal', 'karaoke-pop' — none of which said anything
+// about the look, and one of which was a person's name.
 // The judgement profile — see pipeline presets.py. NOT a caption style:
 // it sets the transcript gate (20 words vs 5), the T1 prompt, and the
 // camera default. Gameplay is one profile, not one-per-game: a per-game
@@ -39,15 +47,22 @@ interface Props {
   error: string | null
   onRun: (source: string, llm: string, captions: string, preset: string, game: string | null) => void
   onOpenLoop: () => void
+  onPlanner: () => void
   onOpenJob: (id: string) => void
   onResume: (id: string, llm?: string) => void
   onDelete: (id: string) => void
 }
 
-export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop, onOpenJob, onResume, onDelete }: Props) {
+export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop, onPlanner, onOpenJob, onResume, onDelete }: Props) {
   const [source, setSource] = useState('')
   const [llm, setLlm] = useState('gemini')
-  const [captions, setCaptions] = useState('classic')
+  const [captions, setCaptions] = useState('gold')
+  const [styles, setStyles] = useState<CaptionStyle[]>([])
+  // Rendering five stills with ffmpeg takes a couple of seconds the first time
+  // and is cached on disk after that, so this is fire-and-forget on mount.
+  useEffect(() => {
+    api.captionStyles().then((r) => setStyles(r.styles)).catch(() => setStyles([]))
+  }, [])
   const [preset, setPreset] = useState('talking')
   const [game, setGame] = useState<string>('')
   const [games, setGames] = useState<GamePreset[]>([])
@@ -58,9 +73,13 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
   useEffect(() => {
     if (preset === 'gameplay') api.presetList().then(setGames).catch(() => setGames([]))
   }, [preset])
-  const [showKey, setShowKey] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
   const [showPresets, setShowPresets] = useState(false)
+  const [logOpen, setLogOpen] = useState(false)
+  // The stage currently working, for the collapsed tab. Whatever has started
+  // and not finished; STAGE_ORDER order, so it reads forwards.
+  const live = STAGE_ORDER.map((n) => [n, stages[n]] as const).find(
+    ([, v]) => v && v.fraction < 1
+  ) as [string, { fraction: number; message: string }] | undefined
 
   async function askDelete(job: JobSummary) {
     const label = job.title ?? job.id
@@ -70,7 +89,7 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
     // change fails visibly-inert rather than as a swallowed rejection.
     const ok = await confirm(
       `Delete "${label}"?\n\nThe whole job folder goes \u2014 transcript, scores, rendered clips. This cannot be undone.`,
-      { title: 'publikclip', kind: 'warning', okLabel: 'Delete', cancelLabel: 'Keep' }
+      { title: 'terraclip', kind: 'warning', okLabel: 'Delete', cancelLabel: 'Keep' }
     ).catch(() => false)
     if (ok) onDelete(job.id)
   }
@@ -78,65 +97,37 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
   return (
     <div className="studio">
       <div className="grain" />
-      {showKey && <KeyModal onClose={() => setShowKey(false)} />}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
       {showPresets && <PresetModal onClose={() => setShowPresets(false)} />}
       <aside className="rail">
         <header className="rail-brand">
-          <span className="rail-logo">publikclip</span>
+          <span className="rail-logo">terraclip</span>
           <span className="rail-sub">the clipper that shows its work</span>
         </header>
-        <div className="rail-jobs">
-          <p className="rail-label">SESSIONS</p>
-          {jobs.length === 0 && <p className="rail-empty">nothing yet</p>}
-          {jobs.map((job) => (
-            <div
-              key={job.id}
-              className="rail-job-wrap"
-              onContextMenu={(e) => {
-                e.preventDefault()
-                if (!running) askDelete(job)
-              }}
-            >
-              {/* the ✕ is a SIBLING of .rail-job, never a child: a <button>
-                  inside a <button> is invalid DOM and React logs it. disabled
-                  matches the row — deleting a job dir while the sidecar writes
-                  checkpoints into it corrupts the run, and on Windows fails
-                  with a sharing violation. */}
-              <button
-                className={`rail-job ${job.rendered ? '' : 'partial'}`}
-                onClick={() => (job.rendered ? onOpenJob(job.id) : onResume(job.id))}
-                disabled={running}
-                title={job.rendered ? 'open results' : 'resume from checkpoint'}
-              >
-                <span className={`led ${job.rendered ? 'led-on' : 'led-half'}`} />
-                <span className="rail-job-title">{job.title ?? job.id}</span>
-                <span className="rail-job-hint">{job.rendered ? 'open' : 'resume'}</span>
-              </button>
-              <button
-                className="rail-job-del"
-                onClick={() => askDelete(job)}
-                disabled={running}
-                title="delete this session"
-                aria-label={`delete ${job.title ?? job.id}`}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
+        <JobGroups
+          jobs={jobs}
+          running={running}
+          onOpen={onOpenJob}
+          onResume={onResume}
+          onDelete={askDelete}
+        />
+        {/* PINNED. These are destinations, not the tail of the job list —
+            they used to sit below every job ever run, so on a machine with a
+            week of history you had to scroll past all of it to reach the
+            preset editor. */}
         <footer className="rail-foot">
-          <button className="btn-ghost" onClick={() => setShowKey(true)}>
-            ◈ gemini key
-          </button>
-          <button className="btn-ghost" onClick={onOpenLoop}>
-            ⟳ instagram loop
-          </button>
           <button className="btn-ghost" onClick={() => setShowPresets(true)}>
             ⌗ game presets
           </button>
-          <button className="btn-ghost" onClick={() => setShowSettings(true)}>
-            ⚙ settings
+          <button className="btn-ghost" onClick={onPlanner}>
+            ▤ planner
+          </button>
+          {/* NOT "instagram loop". It loops nothing: it compares what the
+              judge PREDICTED against what the post actually did, and feeds the
+              difference back into the scorer. Read as video looping — which is
+              a real and completely different feature — it promises something
+              it has never done. */}
+          <button className="btn-ghost" onClick={onOpenLoop}>
+            ◎ what landed
           </button>
         </footer>
       </aside>
@@ -220,41 +211,71 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
                 )}
               </div>
             )}
-            <div className="opt-group">
+            <div className="opt-group cap-group">
               <span className="opt-label">captions</span>
-              {CAPTION_PRESETS.map((preset) => (
-                <button
-                  key={preset}
-                  className={`opt ${captions === preset ? 'opt-on' : ''}`}
-                  onClick={() => setCaptions(preset)}
-                  disabled={running}
-                >
-                  {preset}
-                </button>
-              ))}
+              <div className="cap-strip">
+                {styles.map((st) => (
+                  <button
+                    key={st.name}
+                    className={`cap ${captions === st.name ? 'cap-on' : ''}`}
+                    onClick={() => setCaptions(st.name)}
+                    disabled={running}
+                    title={st.blurb}
+                  >
+                    {st.preview ? (
+                      <img src={api.fileUrl(st.preview)} alt="" draggable={false} />
+                    ) : (
+                      <span className="cap-noimg mono">no preview</span>
+                    )}
+                    <span className="cap-name mono">{st.name}</span>
+                    <span className="cap-blurb">{st.blurb}</span>
+                  </button>
+                ))}
+                {!styles.length && <span className="opt-none mono">rendering previews…</span>}
+              </div>
             </div>
           </div>
         </section>
 
+        {/* THE WORK LOG IS A DRAWER, NOT A TAKEOVER. It used to be a block
+            in the main column, so the moment a job started it displaced
+            everything else and the app became a progress screen for four
+            hours. It is the same information; it just no longer owns the
+            room. Collapsed it keeps the one line that matters. */}
         {(running || Object.keys(stages).length > 0) && (
-          <section className="deck">
-            {STAGE_ORDER.filter((s) => stages[s] || running).map((name, i) => {
-              const st = stages[name]
-              const state = !st ? 'idle' : st.fraction >= 1 ? 'done' : 'live'
-              return (
-                <div className={`deck-row ${state}`} key={name} style={{ animationDelay: `${i * 40}ms` }}>
-                  <span className="deck-name mono">{STAGE_LABELS[name] ?? name.toUpperCase()}</span>
-                  <div className="deck-bar">
-                    <div
-                      className={`deck-fill ${st && st.fraction < 0 ? 'indeterminate' : ''}`}
-                      style={st && st.fraction >= 0 ? { width: `${Math.min(100, st.fraction * 100)}%` } : undefined}
-                    />
+          <aside className={`log ${logOpen ? 'is-open' : ''}`}>
+            <button className="log-tab" onClick={() => setLogOpen((v) => !v)}>
+              <span className={`led ${running ? 'led-live' : 'led-ok'}`} />
+              <span className="log-tab-label mono">
+                {running ? (live ? STAGE_LABELS[live[0]] ?? live[0] : 'WORKING') : 'DONE'}
+              </span>
+              {running && live && (
+                <span className="log-tab-pct mono">
+                  {live[1].fraction >= 0 ? `${Math.round(live[1].fraction * 100)}%` : '···'}
+                </span>
+              )}
+              <span className="log-caret">{logOpen ? '›' : '‹'}</span>
+            </button>
+            <div className="log-body">
+              <p className="audit-label">WORK LOG</p>
+              {STAGE_ORDER.filter((s) => stages[s] || running).map((name, i) => {
+                const st = stages[name]
+                const state = !st ? 'idle' : st.fraction >= 1 ? 'done' : 'live'
+                return (
+                  <div className={`deck-row ${state}`} key={name} style={{ animationDelay: `${i * 40}ms` }}>
+                    <span className="deck-name mono">{STAGE_LABELS[name] ?? name.toUpperCase()}</span>
+                    <div className="deck-bar">
+                      <div
+                        className={`deck-fill ${st && st.fraction < 0 ? 'indeterminate' : ''}`}
+                        style={st && st.fraction >= 0 ? { width: `${Math.min(100, st.fraction * 100)}%` } : undefined}
+                      />
+                    </div>
+                    <span className="deck-msg">{st?.message ?? ''}</span>
                   </div>
-                  <span className="deck-msg">{st?.message ?? ''}</span>
-                </div>
-              )
-            })}
-          </section>
+                )
+              })}
+            </div>
+          </aside>
         )}
 
         {error && (
@@ -263,6 +284,8 @@ export default function Studio({ jobs, running, stages, error, onRun, onOpenLoop
             {error}
           </section>
         )}
+
+        {!running && Object.keys(stages).length === 0 && <LocalBrain />}
       </main>
     </div>
   )

@@ -9,13 +9,13 @@ import json
 
 import pytest
 
-from publikclip_pipeline import cli, config
-from publikclip_pipeline.jobs import queue
+from terraclip_pipeline import cli, config
+from terraclip_pipeline.jobs import queue
 
 
 @pytest.fixture(autouse=True)
 def isolated_home(tmp_path, monkeypatch):
-    monkeypatch.setenv("PUBLIKCLIP_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("TERRACLIP_HOME", str(tmp_path / "home"))
     yield
 
 
@@ -65,7 +65,7 @@ def test_stage_error_still_emits_a_result(capsys, monkeypatch):
 
 
 def test_preflight_fails_before_any_stage_runs(capsys, monkeypatch):
-    from publikclip_pipeline.scoring import llm as llm_mod
+    from terraclip_pipeline.scoring import llm as llm_mod
 
     ran = []
 
@@ -92,7 +92,7 @@ def test_preflight_fails_before_any_stage_runs(capsys, monkeypatch):
 
 
 def test_preflight_skipped_when_score_is_already_checkpointed(capsys, monkeypatch):
-    from publikclip_pipeline.scoring import llm as llm_mod
+    from terraclip_pipeline.scoring import llm as llm_mod
 
     job = _job()
     queue.write_checkpoint(job, "score", 1, {"clips": []})

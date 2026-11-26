@@ -1,0 +1,218 @@
+{
+  "name": "Rocket League",
+  "base": "gameplay",
+  "aspect": 1.7777777777777777,
+  "_note": "REGIONS ARE PLACEHOLDERS, measured on zero frames of this game. Draw them on your own screenshot in the app before the first run. Every tell ships at curve_weight 0.0 \u2014 run once, then `terraclip grade <job> --tell <tell>` to earn it a weight.",
+  "regions": [
+    {
+      "name": "gameplay",
+      "role": "main",
+      "x": 0,
+      "y": 0,
+      "w": 1,
+      "h": 1
+    },
+    {
+      "name": "scoreboard",
+      "role": "margin_top",
+      "x": 0.4,
+      "y": 0,
+      "w": 0.2,
+      "h": 0.075
+    },
+    {
+      "name": "boost",
+      "role": "watch",
+      "x": 0.865,
+      "y": 0.8,
+      "w": 0.1,
+      "h": 0.165,
+      "tell": "rl_boost"
+    },
+    {
+      "name": "goal banner",
+      "role": "watch",
+      "x": 0.28,
+      "y": 0.4,
+      "w": 0.44,
+      "h": 0.12,
+      "tell": "rl_goal_scorer"
+    },
+    {
+      "name": "point awards",
+      "role": "watch",
+      "x": 0.02,
+      "y": 0.4,
+      "w": 0.26,
+      "h": 0.22,
+      "tell": "rl_points"
+    }
+  ],
+  "tells": {
+    "rl_goal_scorer": {
+      "label": "your goal",
+      "prompt": "This crop is a horizontal band across the middle of a Rocket League screen. When a goal is scored the game stops play and prints the SCORER'S NAME across the screen in very large capital letters, then shows a replay. The player we care about is called {player}.\n\nMost of the time there is no name printed here at all - it is ordinary play: the pitch, the cars, the ball, boost trails. That is the normal answer and it is not a failure.\n\nRead the name that is DRAWN. Never work out who scored from the action in the background, from the colour of the cars, from which way the ball went, or from the score.\n\nThe banner draws names in CAPITALS, and some players carry a short club tag in square brackets before the name. A printed name whose letters END with {player} IS {player}, even when a tag or extra characters come before it. If a large name is printed but you genuinely cannot make out the letters, answer OTHER rather than guessing.\n\nAnswer in this order:\n1. scorer - NONE when no large player name is printed across this crop. OWN_GOAL when the words OWN GOAL are printed, whoever's name is beside them. MINE when the large printed name reads {player} and OWN GOAL is not printed. OTHER when a large player name is printed and it is any other name. Decide by the words that are DRAWN.\n2. my_goal - 1 when scorer is MINE, 0 for everything else including OWN_GOAL. This follows from the answer above; do not judge it separately.\n3. readable - False only when the crop is black, still loading, or covered by a menu, the TAB scoreboard, the end-of-match screen or the post-match awards. Ordinary play with no name printed is READABLE with scorer NONE. A goal replay running behind a printed name does NOT make this unreadable: if a large name is drawn, read it.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "scorer": {
+            "type": "string",
+            "enum": [
+              "NONE",
+              "MINE",
+              "OTHER",
+              "OWN_GOAL"
+            ]
+          },
+          "my_goal": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          },
+          "readable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "scorer",
+          "my_goal",
+          "readable"
+        ]
+      },
+      "score": {
+        "kind": "count",
+        "field": "my_goal",
+        "saturate": 1,
+        "floor": 0
+      },
+      "events": {
+        "kind": "delta",
+        "direction": "up",
+        "field": "my_goal",
+        "saturate": 1,
+        "lead": 25,
+        "trail": 2
+      },
+      "curve_weight": 0,
+      "upscale": 1,
+      "interval": 0,
+      "interest": "rl_goal_scorer"
+    },
+    "rl_points": {
+      "label": "point awards",
+      "prompt": "This crop is a small area toward the left of a Rocket League screen, where the game prints the player's OWN point awards for a few seconds after they do something. Each award is a short line naming the play, for example SHOT ON GOAL, SAVE, EPIC SAVE, GOAL, ASSIST, CENTER BALL, CLEAR BALL, DEMOLITION.\n\nThese awards belong to the player whose screen this is. The game does not print another player's award here.\n\nMost of the time there is nothing here - it is ordinary play, with the pitch and cars behind an empty area. That is the normal answer and it is not a failure.\n\nReport only what is DRAWN. Never invent an award, never translate one into your own words, and never guess an award from the action in the background - a shot you can see going in is not an award unless the words are printed.\n\nAnswer in this order:\n1. award - NONE when no award line is drawn at all. Otherwise, the game often prints SEVERAL award lines at once for one play, so do not try to decide which is newest or largest. Instead answer the FIRST of these that appears ANYWHERE in the crop, in this exact order: GOAL, EPIC_SAVE, SAVE, ASSIST, SHOT_ON_GOAL, DEMOLITION, OTHER. GOAL when a line says goal. EPIC_SAVE when a line says epic save. SAVE when a line says save. ASSIST when a line says assist. SHOT_ON_GOAL when a line says shot on goal. DEMOLITION when a line says demolition or demolished. OTHER for any other award line, such as center ball, clear ball, aerial hit or first touch. Choose by the words that are DRAWN.\n2. points - the value of that award, taken from this fixed table and nothing else: NONE is 0, OTHER is 10, SHOT_ON_GOAL is 20, DEMOLITION is 25, ASSIST is 25, SAVE is 50, EPIC_SAVE is 75, GOAL is 100. This follows from the answer above; do not judge it separately and do not read digits off the screen.\n3. readable - False ONLY when this part of the HUD is not drawn at all: a menu, the TAB scoreboard, the goal replay that runs after the game stops play, the end-of-match screen, or a black frame. If an award line IS printed in this crop then the area is readable by definition - answer readable True and read the line, whatever else is on screen. Ordinary play with no award printed is READABLE with award NONE and points 0.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "award": {
+            "type": "string",
+            "enum": [
+              "NONE",
+              "GOAL",
+              "EPIC_SAVE",
+              "SAVE",
+              "ASSIST",
+              "SHOT_ON_GOAL",
+              "DEMOLITION",
+              "OTHER"
+            ]
+          },
+          "points": {
+            "type": "integer",
+            "enum": [
+              0,
+              10,
+              20,
+              25,
+              50,
+              75,
+              100
+            ]
+          },
+          "readable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "award",
+          "points",
+          "readable"
+        ]
+      },
+      "score": {
+        "kind": "count",
+        "field": "points",
+        "saturate": 100,
+        "floor": 1
+      },
+      "events": {
+        "kind": "delta",
+        "direction": "up",
+        "field": "points",
+        "saturate": 100,
+        "lead": 15,
+        "trail": 5,
+        "min_delta": 40
+      },
+      "curve_weight": 0,
+      "upscale": 1,
+      "interval": 0,
+      "interest": "rl_points"
+    },
+    "rl_boost": {
+      "label": "boost",
+      "prompt": "This crop is the bottom-right corner of a Rocket League gameplay recording. It is supposed to contain the BOOST GAUGE: a curved meter with a large NUMBER printed in the middle of it, somewhere between 0 and 100. Report only what is DRAWN in this image. Never infer the boost from what the car is doing, and never estimate from how full the curved meter looks when you can read the digits.\n\nThe number is always printed, even at zero: an empty meter with a printed 0 is a real reading, not a missing one.\n\nIf the curved meter and its number are drawn, READ THEM, whatever the match is doing. Do not decide whether play is live, whether this is a kickoff, or whether anything is happening. This is a question about what is printed in a corner of the picture.\n\nDO NOT over-report unreadable. Cars, the ball, boost trails, goal explosions and bright effects cross this corner constantly and the gauge still reads through them. The digits are large and light-coloured and survive any background. Answer readable=false only when the curved meter and its number are genuinely not drawn: a goal replay, the post-goal celebration, the TAB scoreboard, a menu, the end-of-match screen, or a black or still-loading frame.\n\nAnswer in this order:\n- readable: True when the boost number is legible, False otherwise.\n- boost: the number printed in the middle of the gauge, snapped to the nearest multiple of 5 (48 becomes 50, 12 becomes 10, 0 stays 0, 100 stays 100). Being one step off is acceptable; do not agonise. Answer 0 when readable is False.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "readable": {
+            "type": "boolean"
+          },
+          "boost": {
+            "type": "integer",
+            "enum": [
+              0,
+              5,
+              10,
+              15,
+              20,
+              25,
+              30,
+              35,
+              40,
+              45,
+              50,
+              55,
+              60,
+              65,
+              70,
+              75,
+              80,
+              85,
+              90,
+              95,
+              100
+            ]
+          }
+        },
+        "required": [
+          "readable",
+          "boost"
+        ]
+      },
+      "score": {
+        "kind": "gap",
+        "field": "boost",
+        "full": 100,
+        "floor": 0
+      },
+      "curve_weight": 0,
+      "upscale": 2,
+      "interval": 20,
+      "interest": "rl_boost"
+    }
+  },
+  "watch_interval": 5
+}

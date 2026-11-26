@@ -25,15 +25,15 @@ import json
 import httpx
 import pytest
 
-from publikclip_pipeline.scoring import llm
+from terraclip_pipeline.scoring import llm
 
 
 @pytest.fixture(autouse=True)
 def isolated(tmp_path, monkeypatch):
-    # A dev who exported PUBLIKCLIP_OLLAMA_MODEL takes a different code path
+    # A dev who exported TERRACLIP_OLLAMA_MODEL takes a different code path
     # through make_client and would never exercise the picker at all.
-    monkeypatch.delenv("PUBLIKCLIP_OLLAMA_MODEL", raising=False)
-    monkeypatch.setenv("PUBLIKCLIP_HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("TERRACLIP_OLLAMA_MODEL", raising=False)
+    monkeypatch.setenv("TERRACLIP_HOME", str(tmp_path / "home"))
 
 
 def _m(name, size, params, family, caps):

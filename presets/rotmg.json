@@ -1,0 +1,164 @@
+{
+  "name": "Realm of the Mad God",
+  "base": "gameplay",
+  "aspect": 1.7777777777777777,
+  "friendly": "blue",
+  "_note": "REGIONS ARE PLACEHOLDERS. Draw them on your own screenshot in the app before the first run: the Exalt HUD panel moves with resolution and UI scale, and a box that is 3% off reads the MP bar as the HP bar. Every `tell` below is final; only x/y/w/h need your screen.",
+  "regions": [
+    {
+      "name": "vitals",
+      "role": "watch",
+      "x": 0.795,
+      "y": 0.3,
+      "w": 0.2,
+      "h": 0.09,
+      "tell": "rotmg_vitals"
+    },
+    {
+      "name": "centre",
+      "role": "watch",
+      "x": 0.28,
+      "y": 0.28,
+      "w": 0.44,
+      "h": 0.44,
+      "tell": "rotmg_death"
+    },
+    {
+      "name": "gameplay",
+      "role": "main",
+      "x": 0.0,
+      "y": 0.0,
+      "w": 0.79,
+      "h": 1.0,
+      "tell": "rotmg_loot"
+    }
+  ],
+  "tells": {
+    "rotmg_vitals": {
+      "label": "HP",
+      "interest": "near_death",
+      "prompt": "This crop is the stats panel from the game Realm of the Mad God. It contains a red HP bar and a blue MP bar. Each bar has white text over it in the form CURRENT/MAX, for example 1240/1450.\nRead the HP bar ONLY \u2014 the RED one. Report current HP as a PERCENTAGE of the maximum, rounded to the nearest 5. READ THE NUMBERS; do not estimate from how long the coloured part of the bar looks. Do not read the MP bar.\nIf the text is not legible, if this crop does not show an HP bar, or if a menu, the nexus screen, an inventory popup or a loading screen is covering it, set readable=false and hp_pct=100. Never guess.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "readable": {
+            "type": "boolean"
+          },
+          "hp_pct": {
+            "type": "integer",
+            "enum": [
+              0,
+              5,
+              10,
+              15,
+              20,
+              25,
+              30,
+              35,
+              40,
+              45,
+              50,
+              55,
+              60,
+              65,
+              70,
+              75,
+              80,
+              85,
+              90,
+              95,
+              100
+            ]
+          }
+        },
+        "required": [
+          "readable",
+          "hp_pct"
+        ]
+      },
+      "score": {
+        "kind": "gap",
+        "field": "hp_pct",
+        "full": 100
+      },
+      "events": {
+        "kind": "drop",
+        "field": "hp_pct",
+        "saturate": 40,
+        "lead": 4,
+        "trail": 8
+      },
+      "curve_weight": 0.0,
+      "upscale": 2
+    },
+    "rotmg_death": {
+      "label": "death",
+      "interest": "death",
+      "prompt": "Realm of the Mad God is a permadeath game: when your character dies the screen is replaced by a DEATH SUMMARY \u2014 a tombstone or gravestone, the words 'You died' or 'died at level', and a list of the character's final stats and equipment.\nDoes this crop show that death summary? Answer died=1 if it does, died=0 if you are looking at normal gameplay, a menu, the nexus, a loot popup or anything else. A red screen flash, low health, or a lot of enemy bullets is NOT a death summary \u2014 only the summary screen itself counts.\nSet readable=false only if the crop is blank, black or still loading. Never guess from a red screen flash, from low health, or from how the fight is going. Only the summary screen itself counts.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "readable": {
+            "type": "boolean"
+          },
+          "died": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ]
+          }
+        },
+        "required": [
+          "readable",
+          "died"
+        ]
+      },
+      "events": {
+        "kind": "delta",
+        "direction": "up",
+        "field": "died",
+        "saturate": 1,
+        "lead": 25,
+        "trail": 2
+      },
+      "curve_weight": 0.0,
+      "upscale": 1,
+      "interval": 15
+    },
+    "rotmg_loot": {
+      "label": "white bags",
+      "interest": "white_bag",
+      "prompt": "This crop is gameplay from Realm of the Mad God, viewed from above. When an enemy drops rare loot it leaves a small BAG sprite on the ground. Bags come in colours and the colour is the whole point: brown, pink, purple, cyan, blue, and \u2014 rarest of all \u2014 WHITE.\nCount how many WHITE bags are lying on the ground in this crop. A white bag is a small pure-white pouch shape sitting on the terrain, not a white particle effect, not a bullet, not a projectile, not text, not part of the HUD, and not a white tile in the floor art. If you are not certain a shape is a white bag, do not count it.\nIf this is a menu, the nexus or a loading screen, set readable=false and white_bags=0. Never count a shape you are unsure about, and never infer a bag from an enemy dying or from a particle effect.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "readable": {
+            "type": "boolean"
+          },
+          "white_bags": {
+            "type": "integer",
+            "enum": [
+              0,
+              1,
+              2,
+              3
+            ]
+          }
+        },
+        "required": [
+          "readable",
+          "white_bags"
+        ]
+      },
+      "score": {
+        "kind": "count",
+        "field": "white_bags",
+        "saturate": 1
+      },
+      "curve_weight": 0.0,
+      "upscale": 2,
+      "interval": 30
+    }
+  }
+}

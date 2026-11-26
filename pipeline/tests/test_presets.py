@@ -9,9 +9,9 @@ byte-identical prompts and nothing anywhere reported a problem.
 
 import pytest
 
-from publikclip_pipeline import config, presets
-from publikclip_pipeline.camera import director
-from publikclip_pipeline.scoring import rubric
+from terraclip_pipeline import config, presets
+from terraclip_pipeline.camera import director
+from terraclip_pipeline.scoring import rubric
 
 CTX = {"duration": 40.0, "events_desc": "none detected"}
 

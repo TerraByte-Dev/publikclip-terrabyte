@@ -3,7 +3,7 @@ the first implementation into an infinite loop."""
 
 import numpy as np
 
-from publikclip_pipeline.diarize import cluster
+from terraclip_pipeline.diarize import cluster
 
 
 def test_build_turns_terminates_on_same_speaker_islands():

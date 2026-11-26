@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "publikclip",
+  "productName": "TerraClip",
   "version": "0.1.0",
-  "identifier": "com.publikhq.publikclip",
+  "identifier": "dev.terrabyte.terraclip",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1430",
@@ -12,11 +12,13 @@
   "app": {
     "windows": [
       {
-        "title": "publikclip",
+        "title": "TerraClip",
         "width": 1200,
         "height": 800,
         "minWidth": 900,
-        "minHeight": 620
+        "minHeight": 620,
+        "decorations": false,
+        "titleBarStyle": "Overlay"
       }
     ],
     "security": {
@@ -24,7 +26,7 @@
       "assetProtocol": {
         "enable": true,
         "scope": [
-          "$HOME/.publikclip/**"
+          "$HOME/.terraclip/**"
         ]
       }
     }
@@ -32,6 +34,7 @@
   "bundle": {
     "active": true,
     "targets": [
+      "nsis",
       "dmg"
     ],
     "icon": [
@@ -44,6 +47,9 @@
     ],
     "resources": [
       "resources"
-    ]
+    ],
+    "publisher": "TerraByte Solutions LLC",
+    "shortDescription": "Local-first clipper for long video",
+    "longDescription": "Turns long recordings into short vertical clips. Transcription, HUD reading and judgement all run on your own machine through Ollama \u2014 no upload, no account, no training set."
   }
 }
