@@ -48,8 +48,8 @@ the top of `README.md`; that posture is settled, don't relitigate it.
 - `HANDOFF.md:34` (the `| fork |` row) names the remotes as `terraclip-terrabyte` /
   `Blueturboguy07/terraclip`.
   Both are wrong — a rename sweep caught the URLs. The real ones are in `git remote -v`.
-- `presets\` is **untracked**, and so is `pipeline\terraclip_pipeline\`. `git clean -fdx` — the
-  standard move for resyncing a fork — deletes the product. Commit before you ever reach for it.
+- `presets\` and `pipeline\terraclip_pipeline\` were untracked until 2026-11-26 (PR #1). Still
+  commit anything new before `git clean -fdx`, the standard move for resyncing a fork.
 
 ## Links
 - The workspace that wraps this → `..\..\CLAUDE.md`
